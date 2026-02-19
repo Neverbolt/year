@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Year Overview</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">Year Overview</div>
+        <div class="view-controls">
+          <button class="view-btn" data-view="year">Year</button>
+          <button class="view-btn" data-view="month">Month</button>
+          <button class="view-btn" data-view="week">Week</button>
+        </div>
+        <div class="status" id="connectionStatus">Offline</div>
+      </header>
+
+      <main class="layout">
+        <section class="sidebar" id="sidebar">
+          <div class="panel" id="loginPanel">
+            <h2>Login</h2>
+            <form id="loginForm" class="stack">
+              <label>
+                Password
+                <input type="password" name="password" required />
+              </label>
+              <button type="submit">Sign in</button>
+            </form>
+            <p class="helper" id="loginError"></p>
+          </div>
+
+          <div class="panel hidden" id="categoriesPanel">
+            <h2>Categories</h2>
+            <div class="stack">
+              <label>
+                Filter
+                <select id="categoryFilter"></select>
+              </label>
+              <div id="categoryList" class="category-list"></div>
+              <button id="addCategory">Add category</button>
+            </div>
+          </div>
+
+          <div class="panel hidden" id="dayPanel">
+            <h2 id="dayTitle">Day</h2>
+            <div class="stack">
+              <label>
+                Category
+                <select id="dayCategory"></select>
+              </label>
+              <label>
+                Note
+                <input type="text" id="dayNote" maxlength="32" />
+              </label>
+              <button id="saveDay">Save</button>
+              <button class="ghost" id="clearDay">Clear</button>
+              <p class="helper" id="dayMessage"></p>
+            </div>
+          </div>
+
+          <div class="panel hidden" id="configPanel">
+            <h2>Config</h2>
+            <form id="passwordForm" class="stack">
+              <label>
+                Current password
+                <input type="password" id="currentPassword" required />
+              </label>
+              <label>
+                New password
+                <input type="password" id="newPassword" minlength="8" required />
+              </label>
+              <button type="submit">Update password</button>
+              <p class="helper" id="passwordMessage"></p>
+            </form>
+          </div>
+        </section>
+
+        <section class="content">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <button id="prevPeriod">◀</button>
+              <div id="currentLabel"></div>
+              <button id="nextPeriod">▶</button>
+            </div>
+            <div class="toolbar-right">
+              <button id="toggleConfig" disabled>Config</button>
+            </div>
+          </div>
+
+          <div id="calendar" class="calendar"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
