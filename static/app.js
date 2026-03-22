@@ -598,6 +598,7 @@ function connectWebSocket() {
     }
     if (data.type === "day_updated") {
       state.days.set(data.day.date, data.day);
+      renderCategories();
       renderCalendar();
       if (state.selectedDate && formatDate(state.selectedDate) === data.day.date) {
         const selected = parseDate(data.day.date);
@@ -606,6 +607,7 @@ function connectWebSocket() {
     }
     if (data.type === "day_deleted") {
       state.days.delete(data.date);
+      renderCategories();
       renderCalendar();
       if (state.selectedDate && formatDate(state.selectedDate) === data.date) {
         closeModal("dayModal");

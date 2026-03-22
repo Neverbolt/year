@@ -367,7 +367,7 @@ label {
   gap: 1rem;
   margin-bottom: 0.65rem;
   position: sticky;
-  top: -0.8rem;
+  top: 0;
   padding: 0.65rem 0 0.5rem;
   background: linear-gradient(to bottom, var(--surface), rgba(15, 23, 42, 0.92));
   z-index: 2;
@@ -395,13 +395,17 @@ label {
 
 .sticky-panel {
   position: sticky;
-  top: 2.9rem;
+  top: 3.2rem;
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
   padding-bottom: 0.4rem;
   background: linear-gradient(to bottom, var(--surface), rgba(15, 23, 42, 0.92));
   z-index: 1;
+}
+
+.category-controls {
+  margin-bottom: 0.55rem;
 }
 
 .category-list {
