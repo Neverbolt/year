@@ -104,7 +104,7 @@ function syncAccessUI() {
     ? "Click a category to arm it · drag like text selection · release to save the final range."
     : "Click a category chip to filter the calendar.";
   passwordMessage.textContent = admin
-    ? passwordMessage.textContent
+    ? (passwordMessage.textContent === "Read-only users cannot change system settings." ? "" : passwordMessage.textContent)
     : "Read-only users cannot change system settings.";
 }
 
@@ -483,14 +483,14 @@ function renderManagedUsers() {
 }
 
 async function fetchManagedUsers() {
-  if (!isAdmin() || !state.token) {
+  if (!isAdmin()) {
     state.managedUsers = [];
     renderManagedUsers();
     return;
   }
   try {
     const data = await apiFetch("/api/users");
-    state.managedUsers = data.users || [];
+    state.managedUsers = Array.isArray(data.users) ? data.users : [];
     renderManagedUsers();
   } catch (error) {
     userMessage.textContent = error.message;
@@ -992,6 +992,7 @@ async function restoreSession() {
     state.userRole = me.role || null;
     state.userVersion = me.version ?? null;
     showAppShell();
+    if (state.userRole === "admin") await fetchManagedUsers();
     connectWebSocket();
     return true;
   } catch (_error) {
@@ -1028,6 +1029,7 @@ loginForm.addEventListener("submit", async (event) => {
     await login(String(new FormData(loginForm).get("password")));
     loginForm.reset();
     showAppShell();
+    if (state.userRole === "admin") await fetchManagedUsers();
     connectWebSocket();
   } catch (_error) {
     loginError.textContent = "Login failed.";
@@ -1148,7 +1150,10 @@ userForm.addEventListener("submit", async (event) => {
 
 logoutButton.addEventListener("click", logout);
 
-toggleConfig.addEventListener("click", () => openModal("configModal"));
+toggleConfig.addEventListener("click", async () => {
+  if (isAdmin()) await fetchManagedUsers();
+  openModal("configModal");
+});
 toggleCategories.addEventListener("click", () => openModal("categoriesModal"));
 document.querySelectorAll("[data-close-modal]").forEach((element) => {
   element.addEventListener("click", () => closeModal(element.dataset.closeModal));
