@@ -299,6 +299,16 @@ label {
   margin-right: calc(-1 * var(--note-gap-fill));
 }
 
+.day-cell.note-connect-up,
+.day-card.note-connect-up {
+  margin-top: calc(-1 * var(--note-gap-fill));
+}
+
+.day-cell.note-connect-down,
+.day-card.note-connect-down {
+  margin-bottom: calc(-1 * var(--note-gap-fill));
+}
+
 .day-cell.note-round-top-left,
 .day-card.note-round-top-left {
   border-top-left-radius: var(--day-radius);

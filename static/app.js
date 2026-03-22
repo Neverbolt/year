@@ -192,18 +192,24 @@ function getNoteRangeShape(dateIso) {
   const weekDay = (date.getDay() + 6) % 7;
   const weekStart = addDays(date, -weekDay);
   const weekEnd = addDays(weekStart, 6);
+  const previousWeekIso = formatDate(addDays(date, -7));
+  const nextWeekIso = formatDate(addDays(date, 7));
 
   const rowStart = noteRange.start_date > formatDate(weekStart) ? noteRange.start_date : formatDate(weekStart);
   const rowEnd = noteRange.end_date < formatDate(weekEnd) ? noteRange.end_date : formatDate(weekEnd);
+  const connectsUp = noteRange.start_date <= previousWeekIso && previousWeekIso <= noteRange.end_date;
+  const connectsDown = noteRange.start_date <= nextWeekIso && nextWeekIso <= noteRange.end_date;
 
   return {
     noteRange,
     connectsLeft: rowStart < dateIso,
     connectsRight: rowEnd > dateIso,
-    roundTopLeft: noteRange.start_date === dateIso,
-    roundBottomLeft: noteRange.start_date === dateIso,
-    roundTopRight: noteRange.end_date === dateIso,
-    roundBottomRight: noteRange.end_date === dateIso,
+    connectsUp,
+    connectsDown,
+    roundTopLeft: rowStart === dateIso && !connectsUp,
+    roundBottomLeft: rowStart === dateIso && !connectsDown,
+    roundTopRight: rowEnd === dateIso && !connectsUp,
+    roundBottomRight: rowEnd === dateIso && !connectsDown,
   };
 }
 
@@ -574,6 +580,8 @@ function buildDayCell(dateObj, compact = true) {
     element.classList.add("note-range");
     element.classList.toggle("note-connect-left", noteShape.connectsLeft);
     element.classList.toggle("note-connect-right", noteShape.connectsRight);
+    element.classList.toggle("note-connect-up", noteShape.connectsUp);
+    element.classList.toggle("note-connect-down", noteShape.connectsDown);
     element.classList.toggle("note-round-top-left", noteShape.roundTopLeft);
     element.classList.toggle("note-round-bottom-left", noteShape.roundBottomLeft);
     element.classList.toggle("note-round-top-right", noteShape.roundTopRight);
