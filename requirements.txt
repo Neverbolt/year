@@ -1,0 +1,4 @@
+aiohttp==3.10.5
+aiosqlite==0.20.0
+passlib==1.7.4
+PyJWT==2.9.0
