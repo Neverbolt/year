@@ -1080,9 +1080,12 @@ async def create_user_handler(request: web.Request) -> web.Response:
     admin = await require_http_user(request)
     ensure_admin(admin)
     payload = await request.json()
-    name, role, password, category_ids = parse_user_payload(payload, require_password=True)
-    state: AppState = request.app["state"]
-    user = await state.create_managed_user(name, role, password or "", category_ids)
+    try:
+        name, role, password, category_ids = parse_user_payload(payload, require_password=True)
+        state: AppState = request.app["state"]
+        user = await state.create_managed_user(name, role, password or "", category_ids)
+    except ValueError as exc:
+        raise web.HTTPBadRequest(text=str(exc)) from exc
     await state.refresh_sessions_for_user_ids([admin.id])
     return web.json_response(asdict(user), status=201)
 
@@ -1101,18 +1104,18 @@ async def update_user_handler(request: web.Request) -> web.Response:
     try:
         expected_version = int(expected_value)
         user_id = int(request.match_info["user_id"])
+        name, role, password, category_ids = parse_user_payload(payload, require_password=False)
+        state: AppState = request.app["state"]
+        user = await state.update_managed_user(
+            user_id,
+            expected_version=expected_version,
+            role=role,
+            category_ids=category_ids,
+            password=password,
+            is_active=is_active,
+        )
     except ValueError as exc:
-        raise web.HTTPBadRequest(text="invalid_version") from exc
-    name, role, password, category_ids = parse_user_payload(payload, require_password=False)
-    state: AppState = request.app["state"]
-    user = await state.update_managed_user(
-        user_id,
-        expected_version=expected_version,
-        role=role,
-        category_ids=category_ids,
-        password=password,
-        is_active=is_active,
-    )
+        raise web.HTTPBadRequest(text=str(exc)) from exc
     await state.refresh_sessions_for_user_ids([user_id, admin.id])
     return web.json_response(asdict(user))
 

@@ -87,18 +87,61 @@
           <h2>Config</h2>
           <button class="ghost icon-btn" data-close-modal="configModal">✕</button>
         </div>
-        <form id="passwordForm" class="stack compact">
-          <label>
-            Current password
-            <input type="password" id="currentPassword" required />
-          </label>
-          <label>
-            New password
-            <input type="password" id="newPassword" minlength="8" required />
-          </label>
-          <button type="submit">Update password</button>
-          <p class="helper" id="passwordMessage"></p>
-        </form>
+        <div class="stack config-sections">
+          <section class="config-section">
+            <h3>Password</h3>
+            <form id="passwordForm" class="stack compact">
+              <label>
+                Current password
+                <input type="password" id="currentPassword" required />
+              </label>
+              <label>
+                New password
+                <input type="password" id="newPassword" minlength="8" required />
+              </label>
+              <button type="submit">Update password</button>
+              <p class="helper" id="passwordMessage"></p>
+            </form>
+          </section>
+
+          <section id="userAdminSection" class="config-section hidden">
+            <div class="section-header">
+              <div>
+                <h3>User access</h3>
+                <p class="helper">Create read-only accounts and choose which categories each one can view.</p>
+              </div>
+            </div>
+
+            <form id="userForm" class="stack compact panel-block user-form">
+              <div class="two-column-grid">
+                <label>
+                  Internal name
+                  <input type="text" id="userNameInput" maxlength="32" required />
+                </label>
+                <label>
+                  Role
+                  <select id="userRoleInput">
+                    <option value="readonly">Read only</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </label>
+              </div>
+              <label>
+                Password
+                <input type="password" id="userPasswordInput" minlength="8" required />
+              </label>
+              <fieldset class="permission-fieldset">
+                <legend>Category access</legend>
+                <div class="permission-list" id="newUserPermissions"></div>
+                <p class="helper" id="newUserPermissionHint">Read-only users only see the categories checked here. Admins always see everything.</p>
+              </fieldset>
+              <button type="submit">Create user</button>
+              <p class="helper" id="userMessage"></p>
+            </form>
+
+            <div id="userList" class="user-list"></div>
+          </section>
+        </div>
       </div>
     </div>
 
