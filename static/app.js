@@ -261,7 +261,7 @@ function renderBrushPalette() {
         } else {
           state.brushCategoryId = option.id;
         }
-        renderBrushPalette();
+        renderCalendar();
         return;
       }
       state.filterCategoryId = String(option.id);
