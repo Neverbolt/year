@@ -273,7 +273,7 @@ label {
 .day-cell,
 .day-card {
   --day-radius: 8px;
-  --note-gap-fill: 1.25px;
+  --note-gap-fill: 2px;
   position: relative;
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: var(--day-radius);
@@ -341,9 +341,10 @@ label {
 
 .day-cell span {
   position: absolute;
-  top: 2px;
-  left: 4px;
-  font-size: 0.58rem;
+  top: 1px;
+  left: 3px;
+  font-size: 0.54rem;
+  line-height: 1;
   color: rgba(226, 232, 240, 0.9);
 }
 
@@ -385,9 +386,9 @@ label {
 }
 
 .note-row-label-compact {
-  left: 18px;
-  bottom: 4px;
-  width: calc((100% * var(--note-span)) + (var(--calendar-gap) * (var(--note-span) - 1)) - 23px);
+  left: 5px;
+  bottom: 3px;
+  width: calc((100% * var(--note-span)) + (var(--calendar-gap) * (var(--note-span) - 1)) - 10px);
   font-size: 0.52rem;
   line-height: 1;
   color: rgba(2, 6, 23, 0.95);
