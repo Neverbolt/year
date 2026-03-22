@@ -42,8 +42,6 @@ const nextPeriod = document.getElementById("nextPeriod");
 const viewButtons = document.querySelectorAll(".view-btn");
 const toggleConfig = document.getElementById("toggleConfig");
 const toggleCategories = document.getElementById("toggleCategories");
-const passwordForm = document.getElementById("passwordForm");
-const passwordMessage = document.getElementById("passwordMessage");
 const logoutButton = document.getElementById("logoutButton");
 const categoryForm = document.getElementById("categoryForm");
 const categoryNameInput = document.getElementById("categoryNameInput");
@@ -96,16 +94,10 @@ function syncAccessUI() {
   addCategoryBtn.classList.toggle("hidden", !admin);
   document.body.classList.toggle("read-only-user", !admin);
   setButtonsDisabled(!admin, [addCategoryBtn, saveDayBtn, clearDayBtn]);
-  passwordForm.querySelectorAll("input, button").forEach((element) => {
-    element.disabled = !admin;
-  });
   paintToolbarTitle.textContent = admin ? "Quick assign" : "Filter";
   paintToolbarHint.textContent = admin
     ? "Click a category to arm it · drag like text selection · release to save the final range."
     : "Click a category chip to filter the calendar.";
-  passwordMessage.textContent = admin
-    ? (passwordMessage.textContent === "Read-only users cannot change system settings." ? "" : passwordMessage.textContent)
-    : "Read-only users cannot change system settings.";
 }
 
 function formatDate(date) {
@@ -118,6 +110,10 @@ function formatDate(date) {
 function parseDate(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
+}
+
+function todayIso() {
+  return formatDate(new Date());
 }
 
 function startOfWeek(date) {
@@ -533,6 +529,9 @@ function buildDayCell(dateObj, compact = true) {
   if (state.selectedDate && formatDate(state.selectedDate) === iso) {
     element.classList.add("selected");
   }
+  if (iso === todayIso()) {
+    element.classList.add("today");
+  }
   if (state.previewDates.has(iso)) {
     element.classList.add("painting");
   }
@@ -934,14 +933,11 @@ function connectWebSocket() {
       }
     }
     if (data.type === "password_updated") {
-      passwordMessage.textContent = "Password updated.";
       if (data.user?.version) state.userVersion = data.user.version;
     }
     if (data.type === "error") {
       const message = data.message.replaceAll("_", " ");
-      if (["invalid_credentials", "password_too_short", "read_only"].includes(data.message)) {
-        passwordMessage.textContent = message;
-      } else if (data.message.startsWith("invalid_") || data.message === "category_in_use") {
+      if (data.message.startsWith("invalid_") || data.message === "category_in_use") {
         categoryMessage.textContent = message;
         dayMessage.textContent = message;
         userMessage.textContent = message;
@@ -1100,19 +1096,6 @@ viewButtons.forEach((button) => {
     state.view = button.dataset.view;
     renderCalendar();
   });
-});
-
-passwordForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  passwordMessage.textContent = "";
-  if (!isAdmin()) return;
-  sendMessage({
-    type: "update_password",
-    currentPassword: document.getElementById("currentPassword").value,
-    newPassword: document.getElementById("newPassword").value,
-    expectedVersion: state.userVersion,
-  });
-  passwordForm.reset();
 });
 
 userRoleInput.addEventListener("change", () => {

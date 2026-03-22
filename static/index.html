@@ -89,20 +89,13 @@
         </div>
         <div class="stack config-sections">
           <section class="config-section">
-            <h3>Password</h3>
-            <form id="passwordForm" class="stack compact">
-              <label>
-                Current password
-                <input type="password" id="currentPassword" required />
-              </label>
-              <label>
-                New password
-                <input type="password" id="newPassword" minlength="8" required />
-              </label>
-              <button type="submit">Update password</button>
-              <p class="helper" id="passwordMessage"></p>
-              <button type="button" class="ghost" id="logoutButton">Sign out</button>
-            </form>
+            <div class="section-header compact-header">
+              <div>
+                <h3>Session</h3>
+                <p class="helper">Use the user cards below to rotate passwords. Sign out here when you want to switch accounts.</p>
+              </div>
+            </div>
+            <button type="button" class="ghost" id="logoutButton">Sign out</button>
           </section>
 
           <section id="userAdminSection" class="config-section hidden">

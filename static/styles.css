@@ -633,3 +633,18 @@ select:disabled {
 .paint-mode-active .day-card {
   touch-action: none;
 }
+
+.compact-header {
+  margin-bottom: 0.5rem;
+}
+
+.day-cell.today,
+.day-card.today {
+  box-shadow: inset 0 0 0 2px rgba(250, 204, 21, 0.95);
+}
+
+.day-cell.today span,
+.day-card.today h4 {
+  color: #fef08a;
+  font-weight: 700;
+}
