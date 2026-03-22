@@ -64,7 +64,10 @@ function setStatus(text, ok = false) {
 }
 
 function formatDate(date) {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function parseDate(iso) {
@@ -295,8 +298,7 @@ function buildDayCell(dateObj, compact = true) {
     }
   }
 
-  element.addEventListener("mousedown", (event) => handleDayPointerStart(event, iso));
-  element.addEventListener("mouseenter", () => handleDayPointerEnter(iso));
+  element.addEventListener("pointerdown", (event) => handleDayPointerStart(event, iso));
   element.addEventListener("click", (event) => handleDayClick(event, iso));
   return element;
 }
@@ -490,19 +492,28 @@ function handleDayClick(event, iso) {
 }
 
 function handleDayPointerStart(event, iso) {
-  if (event.button !== 0 || state.brushCategoryId === null) return;
+  if (state.brushCategoryId === null) return;
+  if (event.pointerType === "mouse" && event.button !== 0) return;
   event.preventDefault();
   state.painting = true;
   state.dragStartDate = iso;
   state.dragCurrentDate = iso;
   setPreviewRange(iso, iso);
+  if (event.currentTarget?.setPointerCapture) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
   renderCalendar();
 }
 
-function handleDayPointerEnter(iso) {
+function updatePaintingFromPoint(clientX, clientY, fallbackTarget = null) {
   if (!state.painting || !state.dragStartDate) return;
+  const target =
+    fallbackTarget?.closest?.("[data-date]") ||
+    document.elementFromPoint(clientX, clientY)?.closest?.("[data-date]");
+  const iso = target?.dataset?.date;
+  if (!iso || iso === state.dragCurrentDate) return;
   state.dragCurrentDate = iso;
-  setPreviewRange(state.dragStartDate, iso);
+  setPreviewRange(state.dragStartDate, state.dragCurrentDate);
   renderCalendar();
 }
 
@@ -723,8 +734,11 @@ document.querySelectorAll("[data-close-modal]").forEach((element) => {
   element.addEventListener("click", () => closeModal(element.dataset.closeModal));
 });
 
-document.addEventListener("mouseup", stopPainting);
-document.addEventListener("mouseleave", stopPainting);
+document.addEventListener("pointermove", (event) => {
+  updatePaintingFromPoint(event.clientX, event.clientY, event.target);
+});
+document.addEventListener("pointerup", stopPainting);
+document.addEventListener("pointercancel", stopPainting);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeAllModals();
