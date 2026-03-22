@@ -280,53 +280,43 @@ label {
   cursor: pointer;
   user-select: none;
   touch-action: pan-y pan-x;
-  isolation: isolate;
 }
 
-.day-cell > *,
-.day-card > * {
-  position: relative;
+.day-cell.note-range,
+.day-card.note-range {
+  border-color: transparent;
+  border-radius: 0;
   z-index: 1;
 }
 
-.day-cell.note-range::before,
-.day-card.note-range::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: inherit;
-  border-radius: var(--day-radius);
-  z-index: 0;
+.day-cell.note-connect-left,
+.day-card.note-connect-left {
+  margin-left: calc(-1 * var(--note-gap-fill));
 }
 
-.day-cell.note-connect-left::before,
-.day-card.note-connect-left::before {
-  left: calc(-1 * var(--note-gap-fill));
+.day-cell.note-connect-right,
+.day-card.note-connect-right {
+  margin-right: calc(-1 * var(--note-gap-fill));
 }
 
-.day-cell.note-connect-right::before,
-.day-card.note-connect-right::before {
-  right: calc(-1 * var(--note-gap-fill));
+.day-cell.note-round-top-left,
+.day-card.note-round-top-left {
+  border-top-left-radius: var(--day-radius);
 }
 
-.day-cell.note-range:not(.note-round-top-left)::before,
-.day-card.note-range:not(.note-round-top-left)::before {
-  border-top-left-radius: 0;
+.day-cell.note-round-bottom-left,
+.day-card.note-round-bottom-left {
+  border-bottom-left-radius: var(--day-radius);
 }
 
-.day-cell.note-range:not(.note-round-bottom-left)::before,
-.day-card.note-range:not(.note-round-bottom-left)::before {
-  border-bottom-left-radius: 0;
+.day-cell.note-round-top-right,
+.day-card.note-round-top-right {
+  border-top-right-radius: var(--day-radius);
 }
 
-.day-cell.note-range:not(.note-round-top-right)::before,
-.day-card.note-range:not(.note-round-top-right)::before {
-  border-top-right-radius: 0;
-}
-
-.day-cell.note-range:not(.note-round-bottom-right)::before,
-.day-card.note-range:not(.note-round-bottom-right)::before {
-  border-bottom-right-radius: 0;
+.day-cell.note-round-bottom-right,
+.day-card.note-round-bottom-right {
+  border-bottom-right-radius: var(--day-radius);
 }
 
 .day-cell {
