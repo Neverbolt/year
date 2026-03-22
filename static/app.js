@@ -9,11 +9,13 @@ const state = {
   filterCategoryId: "all",
   palette: [],
   userVersion: null,
-  brushCategoryId: "",
-  paintMode: true,
+  brushCategoryId: null,
   painting: false,
-  dragTouched: new Set(),
+  dragStartDate: null,
+  dragCurrentDate: null,
+  previewDates: new Set(),
   lastSelectedDate: null,
+  suppressNextClick: false,
 };
 
 const loginForm = document.getElementById("loginForm");
@@ -45,8 +47,6 @@ const categoryColorInput = document.getElementById("categoryColorInput");
 const categoryMessage = document.getElementById("categoryMessage");
 const suggestedColors = document.getElementById("suggestedColors");
 const brushPalette = document.getElementById("brushPalette");
-const togglePaintMode = document.getElementById("togglePaintMode");
-const clearSelection = document.getElementById("clearSelection");
 
 const modals = {
   categoriesModal: document.getElementById("categoriesModal"),
@@ -165,7 +165,11 @@ function renderBrushPalette() {
     button.classList.toggle("active", String(state.brushCategoryId) === String(option.id));
     button.innerHTML = `<span class="color-dot" style="background:${option.color}"></span><span>${option.name}</span>`;
     button.addEventListener("click", () => {
-      state.brushCategoryId = option.id;
+      if (String(state.brushCategoryId) === String(option.id)) {
+        state.brushCategoryId = null;
+      } else {
+        state.brushCategoryId = option.id;
+      }
       renderBrushPalette();
     });
     brushPalette.appendChild(button);
@@ -270,7 +274,7 @@ function buildDayCell(dateObj, compact = true) {
   if (state.selectedDate && formatDate(state.selectedDate) === iso) {
     element.classList.add("selected");
   }
-  if (state.dragTouched.has(iso)) {
+  if (state.previewDates.has(iso)) {
     element.classList.add("painting");
   }
 
@@ -447,6 +451,19 @@ function dateRange(startIso, endIso) {
   return dates;
 }
 
+function setPreviewRange(startIso, currentIso) {
+  state.previewDates = new Set(dateRange(startIso, currentIso));
+}
+
+function commitPreviewRange() {
+  if (!state.previewDates.size || state.brushCategoryId === null) return;
+  const categoryId = state.brushCategoryId === "" ? null : state.brushCategoryId;
+  state.previewDates.forEach((date) => {
+    sendDayUpdate(date, categoryId);
+  });
+  state.lastSelectedDate = state.dragCurrentDate || state.dragStartDate;
+}
+
 function handleRangeAssign(targetIso) {
   if (!state.lastSelectedDate) return false;
   const range = dateRange(state.lastSelectedDate, targetIso);
@@ -458,8 +475,12 @@ function handleRangeAssign(targetIso) {
 }
 
 function handleDayClick(event, iso) {
+  if (state.suppressNextClick) {
+    state.suppressNextClick = false;
+    return;
+  }
   if (state.painting) return;
-  if (event.shiftKey && state.brushCategoryId !== undefined) {
+  if (event.shiftKey && state.brushCategoryId !== null) {
     if (handleRangeAssign(iso)) {
       state.lastSelectedDate = iso;
       return;
@@ -469,26 +490,30 @@ function handleDayClick(event, iso) {
 }
 
 function handleDayPointerStart(event, iso) {
-  if (event.button !== 0 || !state.paintMode) return;
+  if (event.button !== 0 || state.brushCategoryId === null) return;
   event.preventDefault();
   state.painting = true;
-  state.dragTouched = new Set([iso]);
-  sendDayUpdate(iso, state.brushCategoryId === "" ? null : state.brushCategoryId);
-  state.lastSelectedDate = iso;
+  state.dragStartDate = iso;
+  state.dragCurrentDate = iso;
+  setPreviewRange(iso, iso);
   renderCalendar();
 }
 
 function handleDayPointerEnter(iso) {
-  if (!state.painting || state.dragTouched.has(iso)) return;
-  state.dragTouched.add(iso);
-  sendDayUpdate(iso, state.brushCategoryId === "" ? null : state.brushCategoryId);
+  if (!state.painting || !state.dragStartDate) return;
+  state.dragCurrentDate = iso;
+  setPreviewRange(state.dragStartDate, iso);
   renderCalendar();
 }
 
 function stopPainting() {
   if (!state.painting) return;
+  commitPreviewRange();
+  state.suppressNextClick = true;
   state.painting = false;
-  state.dragTouched.clear();
+  state.dragStartDate = null;
+  state.dragCurrentDate = null;
+  state.previewDates = new Set();
   renderCalendar();
 }
 
@@ -497,8 +522,11 @@ function handleSnapshot(data) {
   state.days = new Map((data.days || []).map((entry) => [entry.date, entry]));
   state.palette = data.palette || [];
   state.userVersion = data.user?.version ?? null;
-  if (!state.categories.some((cat) => String(cat.id) === String(state.brushCategoryId))) {
-    state.brushCategoryId = state.categories[0]?.id ?? "";
+  if (
+    state.brushCategoryId !== null &&
+    !["", ...state.categories.map((cat) => String(cat.id))].includes(String(state.brushCategoryId))
+  ) {
+    state.brushCategoryId = null;
   }
   updateCategorySelects();
   renderCategories();
@@ -691,18 +719,6 @@ passwordForm.addEventListener("submit", (event) => {
 
 toggleConfig.addEventListener("click", () => openModal("configModal"));
 toggleCategories.addEventListener("click", () => openModal("categoriesModal"));
-togglePaintMode.addEventListener("click", () => {
-  state.paintMode = !state.paintMode;
-  togglePaintMode.textContent = state.paintMode ? "Paint on" : "Paint off";
-  togglePaintMode.classList.toggle("active", state.paintMode);
-});
-clearSelection.addEventListener("click", () => {
-  state.selectedDate = null;
-  state.lastSelectedDate = null;
-  closeModal("dayModal");
-  renderCalendar();
-});
-
 document.querySelectorAll("[data-close-modal]").forEach((element) => {
   element.addEventListener("click", () => closeModal(element.dataset.closeModal));
 });
@@ -717,8 +733,6 @@ document.addEventListener("keydown", (event) => {
 });
 
 setStatus("Offline");
-togglePaintMode.textContent = "Paint on";
-togglePaintMode.classList.add("active");
 updateViewButtons();
 renderBrushPalette();
 renderCalendar();

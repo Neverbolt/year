@@ -148,8 +148,7 @@ label {
 .view-controls,
 .toolbar-right,
 .toolbar-left,
-.button-row,
-.mode-tools {
+.button-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
