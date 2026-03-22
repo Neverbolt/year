@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Year Overview</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="auth-only">
+    <div id="loginScreen" class="login-screen">
+      <form id="loginForm" class="login-card">
+        <h1>Year Overview</h1>
+        <p class="helper">Sign in to load your calendar.</p>
+        <label>
+          Password
+          <input type="password" name="password" autocomplete="current-password" required />
+        </label>
+        <button type="submit">Sign in</button>
+        <p class="helper error-text" id="loginError"></p>
+      </form>
+    </div>
+
+    <div id="appShell" class="app-shell hidden">
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand">Year Overview</div>
+          <div class="status" id="connectionStatus">Offline</div>
+        </div>
+        <div class="view-controls">
+          <button class="view-btn" data-view="year">Year</button>
+          <button class="view-btn" data-view="month">Month</button>
+          <button class="view-btn" data-view="week">Week</button>
+        </div>
+        <div class="toolbar-right">
+          <button class="ghost" id="toggleCategories">Categories</button>
+          <button class="ghost" id="toggleConfig">Config</button>
+        </div>
+      </header>
+
+      <main class="app-main">
+        <section class="workbench">
+          <div class="toolbar main-toolbar">
+            <div class="toolbar-left">
+              <button id="prevPeriod">◀</button>
+              <div id="currentLabel"></div>
+              <button id="nextPeriod">▶</button>
+            </div>
+            <div class="toolbar-right mode-tools">
+              <button id="togglePaintMode" class="ghost">Paint off</button>
+              <button id="clearSelection" class="ghost">Clear selection</button>
+            </div>
+          </div>
+
+          <div class="toolbar paint-toolbar" id="paintToolbar">
+            <div class="paint-meta">
+              <strong>Quick assign</strong>
+              <span class="helper">Drag to paint · Shift-click for ranges · Choose “Unassigned” to erase.</span>
+            </div>
+            <div class="swatch-row" id="brushPalette"></div>
+          </div>
+
+          <div class="calendar-wrap">
+            <div id="calendar" class="calendar"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="categoriesModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="categoriesModal"></div>
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Categories</h2>
+          <button class="ghost icon-btn" data-close-modal="categoriesModal">✕</button>
+        </div>
+        <div class="stack compact">
+          <label>
+            Filter
+            <select id="categoryFilter"></select>
+          </label>
+          <div id="categoryList" class="category-list"></div>
+          <button id="addCategory">Add category</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="configModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="configModal"></div>
+      <div class="modal-card narrow">
+        <div class="modal-header">
+          <h2>Config</h2>
+          <button class="ghost icon-btn" data-close-modal="configModal">✕</button>
+        </div>
+        <form id="passwordForm" class="stack compact">
+          <label>
+            Current password
+            <input type="password" id="currentPassword" required />
+          </label>
+          <label>
+            New password
+            <input type="password" id="newPassword" minlength="8" required />
+          </label>
+          <button type="submit">Update password</button>
+          <p class="helper" id="passwordMessage"></p>
+        </form>
+      </div>
+    </div>
+
+    <div id="categoryModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="categoryModal"></div>
+      <div class="modal-card narrow">
+        <div class="modal-header">
+          <h2>New category</h2>
+          <button class="ghost icon-btn" data-close-modal="categoryModal">✕</button>
+        </div>
+        <form id="categoryForm" class="stack compact">
+          <label>
+            Name
+            <input type="text" id="categoryNameInput" maxlength="24" required />
+          </label>
+          <label>
+            Color
+            <input type="color" id="categoryColorInput" required />
+          </label>
+          <div class="suggested-colors" id="suggestedColors"></div>
+          <button type="submit">Create category</button>
+          <p class="helper" id="categoryMessage"></p>
+        </form>
+      </div>
+    </div>
+
+    <div id="dayModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="dayModal"></div>
+      <div class="modal-card narrow">
+        <div class="modal-header">
+          <h2 id="dayTitle">Day</h2>
+          <button class="ghost icon-btn" data-close-modal="dayModal">✕</button>
+        </div>
+        <div class="stack compact">
+          <label>
+            Category
+            <select id="dayCategory"></select>
+          </label>
+          <label>
+            Note
+            <input type="text" id="dayNote" maxlength="32" />
+          </label>
+          <div class="button-row">
+            <button id="saveDay" type="button">Save</button>
+            <button class="ghost" id="clearDay" type="button">Clear</button>
+          </div>
+          <p class="helper" id="dayMessage"></p>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
