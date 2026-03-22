@@ -182,6 +182,31 @@ function getNoteRangeForDate(dateIso) {
   );
 }
 
+function getNoteRangeShape(dateIso) {
+  const noteRange = getNoteRangeForDate(dateIso);
+  if (!noteRange) {
+    return null;
+  }
+
+  const date = parseDate(dateIso);
+  const weekDay = (date.getDay() + 6) % 7;
+  const weekStart = addDays(date, -weekDay);
+  const weekEnd = addDays(weekStart, 6);
+
+  const rowStart = noteRange.start_date > formatDate(weekStart) ? noteRange.start_date : formatDate(weekStart);
+  const rowEnd = noteRange.end_date < formatDate(weekEnd) ? noteRange.end_date : formatDate(weekEnd);
+
+  return {
+    noteRange,
+    connectsLeft: rowStart < dateIso,
+    connectsRight: rowEnd > dateIso,
+    roundTopLeft: rowStart === dateIso,
+    roundBottomLeft: rowStart === dateIso,
+    roundTopRight: rowEnd === dateIso,
+    roundBottomRight: rowEnd === dateIso,
+  };
+}
+
 function shouldDim(categoryId) {
   if (state.filterCategoryId === "all") return false;
   return String(categoryId) !== String(state.filterCategoryId);
@@ -524,7 +549,8 @@ function setSelectedDate(date) {
 function buildDayCell(dateObj, compact = true) {
   const iso = formatDate(dateObj);
   const entry = getEntry(iso);
-  const noteRange = getNoteRangeForDate(iso);
+  const noteShape = getNoteRangeShape(iso);
+  const noteRange = noteShape?.noteRange ?? null;
   const element = document.createElement("div");
   element.className = compact ? "day-cell" : "day-card";
   element.dataset.date = iso;
@@ -543,6 +569,15 @@ function buildDayCell(dateObj, compact = true) {
   }
   if (state.previewDates.has(iso)) {
     element.classList.add("painting");
+  }
+  if (noteShape) {
+    element.classList.add("note-range");
+    element.classList.toggle("note-connect-left", noteShape.connectsLeft);
+    element.classList.toggle("note-connect-right", noteShape.connectsRight);
+    element.classList.toggle("note-round-top-left", noteShape.roundTopLeft);
+    element.classList.toggle("note-round-bottom-left", noteShape.roundBottomLeft);
+    element.classList.toggle("note-round-top-right", noteShape.roundTopRight);
+    element.classList.toggle("note-round-bottom-right", noteShape.roundBottomRight);
   }
 
   const title = document.createElement(compact ? "span" : "h4");
