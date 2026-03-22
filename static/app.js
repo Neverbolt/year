@@ -70,7 +70,8 @@ const modals = {
 
 let reconnectTimer = null;
 let reconnectDelay = 500;
-let calendarHandlersBound = false;
+let calendarClickBound = false;
+let calendarPaintBound = false;
 
 function isAdmin() {
   return state.userRole === "admin";
@@ -260,7 +261,7 @@ function renderBrushPalette() {
         } else {
           state.brushCategoryId = option.id;
         }
-        renderBrushPalette();
+        renderCalendar();
         return;
       }
       state.filterCategoryId = String(option.id);
@@ -622,27 +623,32 @@ function renderWeekView() {
   calendarEl.appendChild(grid);
 }
 
-function bindCalendarHandlers() {
-  if (calendarHandlersBound) return;
-  calendarEl.addEventListener("pointerdown", handleCalendarPointerDown);
+function bindCalendarClickHandler() {
+  if (calendarClickBound) return;
   calendarEl.addEventListener("click", handleCalendarClick);
-  calendarHandlersBound = true;
+  calendarClickBound = true;
 }
 
-function unbindCalendarHandlers() {
-  if (!calendarHandlersBound) return;
+function bindCalendarPaintHandler() {
+  if (calendarPaintBound) return;
+  calendarEl.addEventListener("pointerdown", handleCalendarPointerDown);
+  calendarPaintBound = true;
+}
+
+function unbindCalendarPaintHandler() {
+  if (!calendarPaintBound) return;
   calendarEl.removeEventListener("pointerdown", handleCalendarPointerDown);
-  calendarEl.removeEventListener("click", handleCalendarClick);
-  calendarHandlersBound = false;
+  calendarPaintBound = false;
 }
 
 function syncCalendarHandlers() {
   const paintModeActive = isAdmin() && state.brushCategoryId !== null;
   document.body.classList.toggle("paint-mode-active", paintModeActive);
+  bindCalendarClickHandler();
   if (paintModeActive) {
-    bindCalendarHandlers();
+    bindCalendarPaintHandler();
   } else {
-    unbindCalendarHandlers();
+    unbindCalendarPaintHandler();
   }
 }
 
