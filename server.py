@@ -66,7 +66,15 @@ class Category:
 class DayEntry:
     date: str
     category_id: int
-    note: Optional[str]
+    version: int
+
+
+@dataclass(frozen=True)
+class NoteRange:
+    id: int
+    start_date: str
+    end_date: str
+    note: str
     version: int
 
 
@@ -100,6 +108,7 @@ class SnapshotMessage:
     type: str
     categories: List[Category]
     days: List[DayEntry]
+    noteRanges: List[NoteRange]
     palette: List[str]
     user: UserSnapshot
     serverTime: str
@@ -139,6 +148,18 @@ class DayUpdatedMessage:
 class DayDeletedMessage:
     type: str
     date: str
+
+
+@dataclass(frozen=True)
+class NoteRangeCreatedMessage:
+    type: str
+    noteRange: NoteRange
+
+
+@dataclass(frozen=True)
+class NoteRangeDeletedMessage:
+    type: str
+    id: int
 
 
 @dataclass(frozen=True)
@@ -238,7 +259,6 @@ class DeleteCategoryMessage:
 class SetDayMessage:
     date: str
     category_id: Optional[int]
-    note: Optional[str]
     expected_version: Optional[int]
 
     @staticmethod
@@ -256,9 +276,6 @@ class SetDayMessage:
                 category_id = int(category_value)
             except (TypeError, ValueError):
                 return None, "invalid_category"
-        note = payload.get("note")
-        if note is not None and not isinstance(note, str):
-            return None, "invalid_note"
         expected_value = payload.get("expectedVersion")
         expected_version = None
         if expected_value is not None:
@@ -273,9 +290,51 @@ class SetDayMessage:
         return SetDayMessage(
             date=date,
             category_id=category_id,
-            note=note,
             expected_version=expected_version,
         ), ""
+
+
+@dataclass(frozen=True)
+class CreateNoteRangeMessage:
+    start_date: str
+    end_date: str
+    note: str
+
+    @staticmethod
+    def parse(payload: Dict[str, Any]) -> Tuple[Optional["CreateNoteRangeMessage"], str]:
+        start_date = payload.get("startDate")
+        end_date = payload.get("endDate")
+        note = payload.get("note")
+        if not isinstance(start_date, str) or not start_date:
+            return None, "invalid_date"
+        if not isinstance(end_date, str) or not end_date:
+            return None, "invalid_date"
+        if not isinstance(note, str) or not note.strip():
+            return None, "invalid_note"
+        return CreateNoteRangeMessage(
+            start_date=start_date,
+            end_date=end_date,
+            note=note.strip(),
+        ), ""
+
+
+@dataclass(frozen=True)
+class DeleteNoteRangeMessage:
+    id: int
+    expected_version: int
+
+    @staticmethod
+    def parse(payload: Dict[str, Any]) -> Tuple[Optional["DeleteNoteRangeMessage"], str]:
+        note_value = payload.get("id")
+        version_value = payload.get("expectedVersion")
+        if not isinstance(note_value, (int, str)) or not isinstance(version_value, (int, str)):
+            return None, "invalid_note"
+        try:
+            note_id = int(note_value)
+            expected_version = int(version_value)
+        except (TypeError, ValueError):
+            return None, "invalid_note"
+        return DeleteNoteRangeMessage(id=note_id, expected_version=expected_version), ""
 
 
 @dataclass(frozen=True)
@@ -437,9 +496,16 @@ async def init_db(db: aiosqlite.Connection) -> None:
         CREATE TABLE IF NOT EXISTS days (
             date TEXT PRIMARY KEY,
             category_id INTEGER NOT NULL,
-            note TEXT,
             version INTEGER NOT NULL,
             FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
+        );
+
+        CREATE TABLE IF NOT EXISTS note_ranges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            note TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 1
         );
 
         CREATE TABLE IF NOT EXISTS user_category_permissions (
@@ -469,6 +535,30 @@ async def init_db(db: aiosqlite.Connection) -> None:
         await db.execute(
             "ALTER TABLE categories ADD COLUMN version INTEGER NOT NULL DEFAULT 1"
         )
+    if await ensure_column(db, "days", "note"):
+        await db.execute(
+            """
+            INSERT INTO note_ranges (start_date, end_date, note, version)
+            SELECT date, date, note, 1
+            FROM days
+            WHERE note IS NOT NULL AND TRIM(note) != ''
+            """
+        )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS days_new (
+                date TEXT PRIMARY KEY,
+                category_id INTEGER NOT NULL,
+                version INTEGER NOT NULL,
+                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
+            )
+            """
+        )
+        await db.execute(
+            "INSERT INTO days_new (date, category_id, version) SELECT date, category_id, version FROM days"
+        )
+        await db.execute("DROP TABLE days")
+        await db.execute("ALTER TABLE days_new RENAME TO days")
     await db.commit()
 
 
@@ -584,6 +674,8 @@ def parse_message(payload: Dict[str, Any]) -> tuple[str, Any, str]:
         "update_category": UpdateCategoryMessage.parse,
         "delete_category": DeleteCategoryMessage.parse,
         "set_day": SetDayMessage.parse,
+        "create_note_range": CreateNoteRangeMessage.parse,
+        "delete_note_range": DeleteNoteRangeMessage.parse,
         "update_password": UpdatePasswordMessage.parse,
     }
     parser = parser_map.get(msg_type)
@@ -670,7 +762,7 @@ class AppState:
         return categories
 
     async def fetch_days(self, user: Optional[AuthenticatedUser] = None) -> List[DayEntry]:
-        query = "SELECT date, category_id, note, version FROM days"
+        query = "SELECT date, category_id, version FROM days"
         params: tuple[Any, ...] = ()
         if user and not user.is_admin:
             allowed = sorted(user.category_ids)
@@ -683,17 +775,61 @@ class AppState:
         days: List[DayEntry] = []
         async with self.db.execute(query, params) as cursor:
             async for row in cursor:
-                days.append(DayEntry(str(row[0]), int(row[1]), row[2], int(row[3])))
+                days.append(DayEntry(str(row[0]), int(row[1]), int(row[2])))
         return days
+
+    async def fetch_note_ranges(self, user: Optional[AuthenticatedUser] = None) -> List[NoteRange]:
+        notes: List[NoteRange] = []
+        if user and not user.is_admin:
+            allowed = sorted(user.category_ids)
+            if not allowed:
+                return []
+            placeholders = ",".join("?" for _ in allowed)
+            query = f"""
+                SELECT
+                    note_ranges.id,
+                    MIN(days.date) AS visible_start_date,
+                    MAX(days.date) AS visible_end_date,
+                    note_ranges.note,
+                    note_ranges.version
+                FROM note_ranges
+                JOIN days
+                    ON days.date BETWEEN note_ranges.start_date AND note_ranges.end_date
+                WHERE days.category_id IN ({placeholders})
+                GROUP BY note_ranges.id, note_ranges.note, note_ranges.version
+                ORDER BY visible_start_date, visible_end_date, note_ranges.id
+            """
+            async with self.db.execute(query, tuple(allowed)) as cursor:
+                async for row in cursor:
+                    if row[1] is None or row[2] is None:
+                        continue
+                    notes.append(
+                        NoteRange(int(row[0]), str(row[1]), str(row[2]), str(row[3]), int(row[4]))
+                    )
+            return notes
+
+        query = (
+            "SELECT id, start_date, end_date, note, version FROM note_ranges "
+            "ORDER BY start_date, end_date, id"
+        )
+        async with self.db.execute(query) as cursor:
+
+            async for row in cursor:
+                notes.append(
+                    NoteRange(int(row[0]), str(row[1]), str(row[2]), str(row[3]), int(row[4]))
+                )
+        return notes
 
     async def build_snapshot(self, user: AuthenticatedUser) -> SnapshotMessage:
         fresh_user = await get_user_by_id(self.db, user.id)
         categories = await self.fetch_categories(fresh_user)
         days = await self.fetch_days(fresh_user)
+        note_ranges = await self.fetch_note_ranges(fresh_user)
         return SnapshotMessage(
             type="snapshot",
             categories=categories,
             days=days,
+            noteRanges=note_ranges,
             palette=COLOR_PALETTE,
             user=UserSnapshot(
                 id=fresh_user.id,
@@ -776,7 +912,6 @@ class AppState:
         self,
         date: str,
         category_id: int,
-        note: Optional[str],
         expected_version: Optional[int],
     ) -> DayEntry:
         await self.db.execute("BEGIN")
@@ -784,24 +919,24 @@ class AppState:
             if expected_version in (None, 0):
                 cursor = await self.db.execute(
                     """
-                    INSERT INTO days (date, category_id, note, version)
-                    VALUES (?, ?, ?, 1)
+                    INSERT INTO days (date, category_id, version)
+                    VALUES (?, ?, 1)
                     ON CONFLICT(date) DO NOTHING
                     """,
-                    (date, category_id, note),
+                    (date, category_id),
                 )
                 if cursor.rowcount != 1:
                     await self.db.rollback()
                     raise ValueError("version_conflict")
                 await self.db.commit()
-                return DayEntry(date, category_id, note, 1)
+                return DayEntry(date, category_id, 1)
             cursor = await self.db.execute(
                 """
                 UPDATE days
-                SET category_id = ?, note = ?, version = version + 1
+                SET category_id = ?, version = version + 1
                 WHERE date = ? AND version = ?
                 """,
-                (category_id, note, date, expected_version),
+                (category_id, date, expected_version),
             )
             if cursor.rowcount != 1:
                 await self.db.rollback()
@@ -812,7 +947,7 @@ class AppState:
             raise
         if expected_version is None:
             raise RuntimeError("Missing expected version for update")
-        return DayEntry(date, category_id, note, expected_version + 1)
+        return DayEntry(date, category_id, expected_version + 1)
 
     async def delete_day(self, date: str, expected_version: Optional[int]) -> None:
         if expected_version is None:
@@ -822,6 +957,54 @@ class AppState:
             cursor = await self.db.execute(
                 "DELETE FROM days WHERE date = ? AND version = ?",
                 (date, expected_version),
+            )
+            if cursor.rowcount != 1:
+                await self.db.rollback()
+                raise ValueError("version_conflict")
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+    async def create_note_range(self, start_date: str, end_date: str, note: str) -> NoteRange:
+        if end_date < start_date:
+            start_date, end_date = end_date, start_date
+        await self.db.execute("BEGIN")
+        try:
+            async with self.db.execute(
+                """
+                SELECT 1
+                FROM note_ranges
+                WHERE NOT (end_date < ? OR start_date > ?)
+                LIMIT 1
+                """,
+                (start_date, end_date),
+            ) as cursor:
+                row = await cursor.fetchone()
+            if row:
+                await self.db.rollback()
+                raise ValueError("note_range_overlap")
+            cursor = await self.db.execute(
+                "INSERT INTO note_ranges (start_date, end_date, note, version) VALUES (?, ?, ?, 1)",
+                (start_date, end_date, note),
+            )
+            if cursor.rowcount != 1:
+                await self.db.rollback()
+                raise RuntimeError("note_create_failed")
+            async with self.db.execute("SELECT last_insert_rowid()") as id_cursor:
+                id_row = await id_cursor.fetchone()
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+        return NoteRange(int(id_row[0]), start_date, end_date, note, 1)
+
+    async def delete_note_range(self, note_id: int, expected_version: int) -> None:
+        await self.db.execute("BEGIN")
+        try:
+            cursor = await self.db.execute(
+                "DELETE FROM note_ranges WHERE id = ? AND version = ?",
+                (note_id, expected_version),
             )
             if cursor.rowcount != 1:
                 await self.db.rollback()
@@ -1242,6 +1425,7 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                         if user.is_admin
                         else None
                     )
+                    await state.refresh_readonly_sessions()
                 case UpdateCategoryMessage(
                     id=category_id,
                     name=name,
@@ -1260,9 +1444,10 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                         continue
                     await state.broadcast_filtered(
                         lambda user: CategoryUpdatedMessage(type="category_updated", category=category)
-                        if user.is_admin or category.id in user.category_ids
+                        if user.is_admin
                         else None
                     )
+                    await state.refresh_readonly_sessions()
                 case DeleteCategoryMessage(id=category_id, expected_version=expected_version):
                     if not active_user.is_admin:
                         await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
@@ -1281,13 +1466,13 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                         continue
                     await state.broadcast_filtered(
                         lambda user: CategoryDeletedMessage(type="category_deleted", id=category_id)
-                        if user.is_admin or category_id in user.category_ids
+                        if user.is_admin
                         else None
                     )
+                    await state.refresh_readonly_sessions()
                 case SetDayMessage(
                     date=date,
                     category_id=category_id,
-                    note=note,
                     expected_version=expected_version,
                 ):
                     if not active_user.is_admin:
@@ -1301,18 +1486,54 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                                 if user.is_admin
                                 else None
                             )
+                            await state.refresh_readonly_sessions()
                         else:
-                            entry = await state.upsert_day(date, category_id, note, expected_version)
+                            entry = await state.upsert_day(date, category_id, expected_version)
                             await state.broadcast_filtered(
                                 lambda user: DayUpdatedMessage(type="day_updated", day=entry)
-                                if user.is_admin or entry.category_id in user.category_ids
+                                if user.is_admin
                                 else None
                             )
+                            await state.refresh_readonly_sessions()
                     except ValueError as exc:
                         await ws.send_str(
                             encode_message(ErrorMessage(type="error", message=str(exc)))
                         )
                         continue
+                case CreateNoteRangeMessage(start_date=start_date, end_date=end_date, note=note):
+                    if not active_user.is_admin:
+                        await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
+                        continue
+                    try:
+                        note_range = await state.create_note_range(start_date, end_date, note)
+                    except ValueError as exc:
+                        await ws.send_str(
+                            encode_message(ErrorMessage(type="error", message=str(exc)))
+                        )
+                        continue
+                    await state.broadcast_filtered(
+                        lambda user: NoteRangeCreatedMessage(type="note_range_created", noteRange=note_range)
+                        if user.is_admin
+                        else None
+                    )
+                    await state.refresh_readonly_sessions()
+                case DeleteNoteRangeMessage(id=note_id, expected_version=expected_version):
+                    if not active_user.is_admin:
+                        await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
+                        continue
+                    try:
+                        await state.delete_note_range(note_id, expected_version)
+                    except ValueError as exc:
+                        await ws.send_str(
+                            encode_message(ErrorMessage(type="error", message=str(exc)))
+                        )
+                        continue
+                    await state.broadcast_filtered(
+                        lambda user: NoteRangeDeletedMessage(type="note_range_deleted", id=note_id)
+                        if user.is_admin
+                        else None
+                    )
+                    await state.refresh_readonly_sessions()
                 case UpdatePasswordMessage(
                     current_password=current_password,
                     new_password=new_password,

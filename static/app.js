@@ -3,9 +3,12 @@ const state = {
   ws: null,
   categories: [],
   days: new Map(),
+  noteRanges: [],
   view: "year",
   currentDate: new Date(),
   selectedDate: null,
+  selectedNoteRangeId: null,
+  pendingNoteRange: null,
   filterCategoryId: "all",
   palette: [],
   userVersion: null,
@@ -30,7 +33,6 @@ const categoryFilter = document.getElementById("categoryFilter");
 const addCategoryBtn = document.getElementById("addCategory");
 const calendarEl = document.getElementById("calendar");
 const dayTitle = document.getElementById("dayTitle");
-const dayCategory = document.getElementById("dayCategory");
 const dayNote = document.getElementById("dayNote");
 const dayMessage = document.getElementById("dayMessage");
 const saveDayBtn = document.getElementById("saveDay");
@@ -97,7 +99,7 @@ function syncAccessUI() {
   setButtonsDisabled(!admin, [addCategoryBtn, saveDayBtn, clearDayBtn]);
   paintToolbarTitle.textContent = admin ? "Quick assign" : "Filter";
   paintToolbarHint.textContent = admin
-    ? "Click a category to arm it · drag like text selection · release to save the final range."
+    ? "Pick a category or Notes · drag like text selection · release to save the final range."
     : "Click a category chip to filter the calendar.";
 }
 
@@ -146,6 +148,10 @@ function closeModal(name) {
   if (!modal) return;
   modal.classList.add("hidden");
   modal.setAttribute("aria-hidden", "true");
+  if (name === "dayModal") {
+    state.pendingNoteRange = null;
+    state.selectedNoteRangeId = null;
+  }
 }
 
 function closeAllModals() {
@@ -166,6 +172,14 @@ function getCategoryColor(categoryId) {
 
 function getEntry(dateIso) {
   return state.days.get(dateIso) || null;
+}
+
+function getNoteRangeForDate(dateIso) {
+  return (
+    state.noteRanges.find(
+      (range) => range.start_date <= dateIso && dateIso <= range.end_date
+    ) || null
+  );
 }
 
 function shouldDim(categoryId) {
@@ -207,18 +221,6 @@ function renderPermissionSelector(container, selectedIds = [], disabled = false)
 }
 
 function updateCategorySelects() {
-  dayCategory.innerHTML = "";
-  const unassigned = document.createElement("option");
-  unassigned.value = "";
-  unassigned.textContent = "Unassigned";
-  dayCategory.appendChild(unassigned);
-  state.categories.forEach((cat) => {
-    const option = document.createElement("option");
-    option.value = String(cat.id);
-    option.textContent = cat.name;
-    dayCategory.appendChild(option);
-  });
-
   categoryFilter.innerHTML = "";
   const allOption = document.createElement("option");
   allOption.value = "all";
@@ -243,7 +245,11 @@ function updateCategorySelects() {
 function renderBrushPalette() {
   brushPalette.innerHTML = "";
   const options = isAdmin()
-    ? [{ id: "", name: "Unassigned", color: "#020617" }, ...state.categories]
+    ? [
+        { id: "", name: "Unassigned", color: "#020617" },
+        { id: "__note__", name: "Notes", color: "#f8fafc" },
+        ...state.categories,
+      ]
     : [{ id: "all", name: "All", color: "#020617" }, ...state.categories];
   options.forEach((option) => {
     const button = document.createElement("button");
@@ -497,19 +503,20 @@ async function fetchManagedUsers() {
 function setSelectedDate(date) {
   state.selectedDate = date;
   state.lastSelectedDate = formatDate(date);
+  state.selectedNoteRangeId = null;
+  state.pendingNoteRange = null;
   dayMessage.textContent = "";
   const iso = formatDate(date);
-  const entry = getEntry(iso);
+  const noteRange = getNoteRangeForDate(iso);
   dayTitle.textContent = date.toDateString();
-  dayCategory.value = entry ? String(entry.category_id) : "";
-  dayNote.value = entry?.note ?? "";
-  dayCategory.disabled = !isAdmin();
+  dayNote.value = noteRange?.note ?? "";
   dayNote.disabled = !isAdmin();
-  saveDayBtn.disabled = !isAdmin();
-  clearDayBtn.disabled = !isAdmin();
-  if (!isAdmin()) {
-    dayMessage.textContent = "Read-only users can inspect day details but cannot edit them.";
-  }
+  saveDayBtn.disabled = !isAdmin() || !noteRange;
+  clearDayBtn.disabled = !isAdmin() || !noteRange;
+  state.selectedNoteRangeId = noteRange?.id ?? null;
+  dayMessage.textContent = noteRange
+    ? `${noteRange.start_date} → ${noteRange.end_date}`
+    : "No note for this date.";
   openModal("dayModal");
   renderCalendar();
 }
@@ -517,6 +524,7 @@ function setSelectedDate(date) {
 function buildDayCell(dateObj, compact = true) {
   const iso = formatDate(dateObj);
   const entry = getEntry(iso);
+  const noteRange = getNoteRangeForDate(iso);
   const element = document.createElement("div");
   element.className = compact ? "day-cell" : "day-card";
   element.dataset.date = iso;
@@ -543,13 +551,13 @@ function buildDayCell(dateObj, compact = true) {
     : dateObj.toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
   element.appendChild(title);
 
-  if (entry?.note) {
+  if (noteRange?.note) {
     if (compact) {
       element.classList.add("note");
-      element.dataset.note = entry.note;
+      element.dataset.note = noteRange.note;
     } else {
       const note = document.createElement("p");
-      note.textContent = entry.note;
+      note.textContent = noteRange.note;
       element.appendChild(note);
     }
   }
@@ -691,7 +699,7 @@ function suggestColors(palette, existing, limit = 5) {
     .map((item) => item.candidate);
 }
 
-function applyLocalDayState(date, categoryId, note) {
+function applyLocalDayState(date, categoryId) {
   const existing = getEntry(date);
   if (categoryId === null || categoryId === "") {
     if (existing) {
@@ -703,12 +711,11 @@ function applyLocalDayState(date, categoryId, note) {
   state.days.set(date, {
     date,
     category_id: Number(categoryId),
-    note,
     version: nextVersion,
   });
 }
 
-function sendDayUpdate(date, categoryId, note = null) {
+function sendDayUpdate(date, categoryId) {
   if (!isAdmin()) return;
   const entry = getEntry(date);
   if ((categoryId === null || categoryId === "") && !entry) {
@@ -718,10 +725,19 @@ function sendDayUpdate(date, categoryId, note = null) {
     type: "set_day",
     date,
     categoryId,
-    note,
     expectedVersion: entry ? entry.version : null,
   });
-  applyLocalDayState(date, categoryId, note);
+  applyLocalDayState(date, categoryId);
+}
+
+function sendNoteRangeCreate(startDate, endDate, note) {
+  if (!isAdmin()) return;
+  sendMessage({
+    type: "create_note_range",
+    startDate,
+    endDate,
+    note,
+  });
 }
 
 function dateRange(startIso, endIso) {
@@ -744,11 +760,29 @@ function setPreviewRange(startIso, currentIso) {
 
 function commitPreviewRange() {
   if (!isAdmin() || !state.previewDates.size || state.brushCategoryId === null) return;
-  const categoryId = state.brushCategoryId === "" ? null : state.brushCategoryId;
-  state.previewDates.forEach((date) => {
-    sendDayUpdate(date, categoryId);
-  });
-  state.lastSelectedDate = state.dragCurrentDate || state.dragStartDate;
+  const startDate = state.dragStartDate;
+  const endDate = state.dragCurrentDate || state.dragStartDate;
+  if (!startDate || !endDate) return;
+  if (state.brushCategoryId === "__note__") {
+    state.selectedDate = parseDate(startDate);
+    state.selectedNoteRangeId = null;
+    state.pendingNoteRange = { startDate, endDate };
+    dayTitle.textContent =
+      startDate === endDate ? startDate : `${startDate} → ${endDate}`;
+    dayNote.value = "";
+    dayNote.disabled = false;
+    saveDayBtn.disabled = false;
+    clearDayBtn.disabled = true;
+    dayMessage.textContent = "Enter a note for the painted range.";
+    openModal("dayModal");
+  } else {
+    state.pendingNoteRange = null;
+    const categoryId = state.brushCategoryId === "" ? null : state.brushCategoryId;
+    state.previewDates.forEach((date) => {
+      sendDayUpdate(date, categoryId);
+    });
+    state.lastSelectedDate = endDate;
+  }
 }
 
 function handleRangeAssign(targetIso) {
@@ -767,13 +801,15 @@ function handleDayClick(event, iso) {
     return;
   }
   if (state.painting) return;
-  if (event.shiftKey && state.brushCategoryId !== null) {
+  if (event.shiftKey && state.brushCategoryId !== null && state.brushCategoryId !== "__note__") {
     if (handleRangeAssign(iso)) {
       state.lastSelectedDate = iso;
       return;
     }
   }
-  setSelectedDate(parseDate(iso));
+  if (getNoteRangeForDate(iso)) {
+    setSelectedDate(parseDate(iso));
+  }
 }
 
 function handleCalendarClick(event) {
@@ -838,6 +874,7 @@ async function syncAdminData() {
 async function handleSnapshot(data) {
   state.categories = data.categories || [];
   state.days = new Map((data.days || []).map((entry) => [entry.date, entry]));
+  state.noteRanges = data.noteRanges || [];
   state.palette = data.palette || [];
   state.userVersion = data.user?.version ?? null;
   state.userRole = data.user?.role ?? state.userRole;
@@ -925,18 +962,27 @@ function connectWebSocket() {
       state.days.set(data.day.date, data.day);
       renderCategories();
       renderCalendar();
-      if (state.selectedDate && formatDate(state.selectedDate) === data.day.date) {
-        const selected = parseDate(data.day.date);
-        setSelectedDate(selected);
-      }
     }
     if (data.type === "day_deleted") {
       state.days.delete(data.date);
       renderCategories();
       renderCalendar();
-      if (state.selectedDate && formatDate(state.selectedDate) === data.date) {
+    }
+    if (data.type === "note_range_created") {
+      state.noteRanges.push(data.noteRange);
+      renderCalendar();
+      if (state.pendingNoteRange) {
         closeModal("dayModal");
+        state.pendingNoteRange = null;
       }
+    }
+    if (data.type === "note_range_deleted") {
+      state.noteRanges = state.noteRanges.filter((range) => range.id !== data.id);
+      if (state.selectedNoteRangeId === data.id) {
+        closeModal("dayModal");
+        state.selectedNoteRangeId = null;
+      }
+      renderCalendar();
     }
     if (data.type === "password_updated") {
       if (data.user?.version) state.userVersion = data.user.version;
@@ -1017,6 +1063,9 @@ async function logout() {
     state.managedUsers = [];
     state.categories = [];
     state.days = new Map();
+    state.noteRanges = [];
+    state.selectedNoteRangeId = null;
+    state.pendingNoteRange = null;
     if (state.ws) state.ws.close();
     closeAllModals();
     renderManagedUsers();
@@ -1060,21 +1109,32 @@ categoryForm.addEventListener("submit", (event) => {
 });
 
 saveDayBtn.addEventListener("click", () => {
-  if (!state.selectedDate || !isAdmin()) return;
-  const iso = formatDate(state.selectedDate);
-  sendDayUpdate(iso, dayCategory.value || null, dayNote.value.trim() || null);
-  dayMessage.textContent = "Saved.";
-  renderCalendar();
+  if (!isAdmin()) return;
+  const note = dayNote.value.trim();
+  if (!note) {
+    dayMessage.textContent = "Note is required.";
+    return;
+  }
+  if (state.pendingNoteRange) {
+    sendNoteRangeCreate(state.pendingNoteRange.startDate, state.pendingNoteRange.endDate, note);
+    dayMessage.textContent = "Saving.";
+    return;
+  }
+  dayMessage.textContent = "Editing existing notes is not supported yet.";
 });
 
 clearDayBtn.addEventListener("click", () => {
-  if (!state.selectedDate || !isAdmin()) return;
-  const iso = formatDate(state.selectedDate);
-  if (!getEntry(iso)) {
-    dayMessage.textContent = "No entry to clear.";
+  if (!isAdmin()) return;
+  const selectedRange = state.noteRanges.find((range) => range.id === state.selectedNoteRangeId);
+  if (!selectedRange) {
+    dayMessage.textContent = "No note to clear.";
     return;
   }
-  sendDayUpdate(iso, null);
+  sendMessage({
+    type: "delete_note_range",
+    id: selectedRange.id,
+    expectedVersion: selectedRange.version,
+  });
   closeModal("dayModal");
 });
 
