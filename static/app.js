@@ -11,6 +11,7 @@ const state = {
   userVersion: null,
   userRole: null,
   managedUsers: [],
+  sessionActive: false,
   brushCategoryId: null,
   painting: false,
   dragStartDate: null,
@@ -43,6 +44,7 @@ const toggleConfig = document.getElementById("toggleConfig");
 const toggleCategories = document.getElementById("toggleCategories");
 const passwordForm = document.getElementById("passwordForm");
 const passwordMessage = document.getElementById("passwordMessage");
+const logoutButton = document.getElementById("logoutButton");
 const categoryForm = document.getElementById("categoryForm");
 const categoryNameInput = document.getElementById("categoryNameInput");
 const categoryColorInput = document.getElementById("categoryColorInput");
@@ -801,13 +803,16 @@ function sendMessage(payload) {
 }
 
 async function apiFetch(url, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+  if (state.token) {
+    headers.Authorization = `Bearer ${state.token}`;
+  }
   const response = await fetch(url, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${state.token}`,
-      ...(options.headers || {}),
-    },
+    headers,
   });
   if (!response.ok) {
     let message = response.statusText || "Request failed";
@@ -828,7 +833,7 @@ function connectWebSocket() {
   state.ws.addEventListener("open", () => {
     setStatus("Connected", true);
     reconnectDelay = 500;
-    sendMessage({ type: "auth", token: state.token });
+    if (state.token) sendMessage({ type: "auth", token: state.token });
   });
 
   state.ws.addEventListener("message", async (event) => {
@@ -897,6 +902,7 @@ function connectWebSocket() {
   state.ws.addEventListener("close", () => {
     setStatus("Disconnected");
     if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (!state.sessionActive) return;
     reconnectTimer = setTimeout(() => {
       reconnectDelay = Math.min(reconnectDelay * 2, 5000);
       connectWebSocket();
@@ -912,8 +918,57 @@ async function login(password) {
   });
   if (!response.ok) throw new Error("Invalid credentials");
   const data = await response.json();
-  state.token = data.token;
+  state.token = null;
   state.userRole = data.role || null;
+}
+
+function showAppShell() {
+  state.sessionActive = true;
+  document.body.classList.remove("auth-only");
+  loginScreen.classList.add("hidden");
+  appShell.classList.remove("hidden");
+}
+
+function showLoginScreen() {
+  state.sessionActive = false;
+  document.body.classList.add("auth-only");
+  loginScreen.classList.remove("hidden");
+  appShell.classList.add("hidden");
+}
+
+async function restoreSession() {
+  try {
+    const me = await apiFetch("/api/me", { headers: {} });
+    state.userRole = me.role || null;
+    state.userVersion = me.version ?? null;
+    showAppShell();
+    connectWebSocket();
+    return true;
+  } catch (_error) {
+    showLoginScreen();
+    return false;
+  }
+}
+
+async function logout() {
+  try {
+    await fetch("/api/logout", { method: "POST" });
+  } finally {
+    state.sessionActive = false;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    state.token = null;
+    state.userRole = null;
+    state.userVersion = null;
+    state.managedUsers = [];
+    state.categories = [];
+    state.days = new Map();
+    if (state.ws) state.ws.close();
+    closeAllModals();
+    renderManagedUsers();
+    renderCategories();
+    renderCalendar();
+    showLoginScreen();
+  }
 }
 
 loginForm.addEventListener("submit", async (event) => {
@@ -922,9 +977,7 @@ loginForm.addEventListener("submit", async (event) => {
   try {
     await login(String(new FormData(loginForm).get("password")));
     loginForm.reset();
-    document.body.classList.remove("auth-only");
-    loginScreen.classList.add("hidden");
-    appShell.classList.remove("hidden");
+    showAppShell();
     connectWebSocket();
   } catch (_error) {
     loginError.textContent = "Login failed.";
@@ -1043,6 +1096,8 @@ userForm.addEventListener("submit", async (event) => {
   }
 });
 
+logoutButton.addEventListener("click", logout);
+
 toggleConfig.addEventListener("click", () => openModal("configModal"));
 toggleCategories.addEventListener("click", () => openModal("categoriesModal"));
 document.querySelectorAll("[data-close-modal]").forEach((element) => {
@@ -1067,3 +1122,4 @@ updateViewButtons();
 renderBrushPalette();
 renderCalendar();
 renderManagedUsers();
+restoreSession();

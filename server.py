@@ -26,6 +26,7 @@ ALLOWED_ORIGINS = {
 }
 JWT_SECRET = secrets.token_urlsafe(32)
 JWT_ALG = "HS256"
+SESSION_COOKIE_NAME = "year_session"
 READ_ONLY_ROLE = "readonly"
 ADMIN_ROLE = "admin"
 VALID_ROLES = {ADMIN_ROLE, READ_ONLY_ROLE}
@@ -1028,11 +1029,18 @@ def ensure_origin_allowed(request: web.Request) -> None:
         raise web.HTTPForbidden(text="Origin not allowed")
 
 
-async def require_http_user(request: web.Request) -> AuthenticatedUser:
+def token_from_request(request: web.Request) -> str:
     auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise web.HTTPUnauthorized(text="Missing bearer token")
-    user_id = jwt_verify(auth_header.removeprefix("Bearer ").strip())
+    if auth_header.startswith("Bearer "):
+        return auth_header.removeprefix("Bearer ").strip()
+    cookie_token = request.cookies.get(SESSION_COOKIE_NAME, "").strip()
+    if cookie_token:
+        return cookie_token
+    raise web.HTTPUnauthorized(text="Missing session")
+
+
+async def require_http_user(request: web.Request) -> AuthenticatedUser:
+    user_id = jwt_verify(token_from_request(request))
     return await get_user_by_id(request.app["db"], user_id)
 
 
@@ -1049,7 +1057,26 @@ async def login_handler(request: web.Request) -> web.Response:
     if user is None:
         raise web.HTTPUnauthorized(text="Invalid credentials")
     token = jwt_issue(user)
-    return web.json_response({"token": token, "role": user.role})
+    response = web.json_response({"role": user.role})
+    response.set_cookie(
+        SESSION_COOKIE_NAME,
+        token,
+        httponly=True,
+        samesite="Strict",
+        secure=request.secure,
+        path="/",
+        max_age=60 * 60 * 24 * 14,
+    )
+    return response
+
+
+
+
+async def logout_handler(request: web.Request) -> web.Response:
+    ensure_origin_allowed(request)
+    response = web.json_response({"ok": True})
+    response.del_cookie(SESSION_COOKIE_NAME, path="/")
+    return response
 
 
 async def me_handler(request: web.Request) -> web.Response:
@@ -1120,7 +1147,20 @@ async def update_user_handler(request: web.Request) -> web.Response:
     return web.json_response(asdict(user))
 
 
-async def auth_ws(ws: web.WebSocketResponse, db: aiosqlite.Connection) -> Optional[AuthenticatedUser]:
+async def auth_ws(
+    ws: web.WebSocketResponse,
+    db: aiosqlite.Connection,
+    request: web.Request,
+) -> Optional[AuthenticatedUser]:
+    cookie_token = request.cookies.get(SESSION_COOKIE_NAME, "").strip()
+    if cookie_token:
+        try:
+            return await get_user_by_id(db, jwt_verify(cookie_token))
+        except AuthError:
+            await ws.send_str(
+                encode_message(ErrorMessage(type="error", message="auth_failed"))
+            )
+
     for _ in range(3):
         msg = await ws.receive()
         if msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSED, WSMsgType.ERROR):
@@ -1160,7 +1200,7 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     await ws.prepare(request)
     state: AppState = request.app["state"]
 
-    authed_user = await auth_ws(ws, state.db)
+    authed_user = await auth_ws(ws, state.db, request)
     if authed_user is None:
         return ws
 
@@ -1329,6 +1369,7 @@ async def create_app() -> web.Application:
     app.router.add_get("/", index_handler)
     app.router.add_get("/health", health_handler)
     app.router.add_post("/api/login", login_handler)
+    app.router.add_post("/api/logout", logout_handler)
     app.router.add_get("/api/me", me_handler)
     app.router.add_get("/api/users", list_users_handler)
     app.router.add_post("/api/users", create_user_handler)
