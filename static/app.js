@@ -202,6 +202,13 @@ function renderSuggestedColors() {
 
 function renderCategories() {
   categoryList.innerHTML = "";
+  const categoryCounts = new Map();
+  state.days.forEach((entry) => {
+    categoryCounts.set(
+      entry.category_id,
+      (categoryCounts.get(entry.category_id) || 0) + 1
+    );
+  });
   state.categories.forEach((cat) => {
     const item = document.createElement("div");
     item.className = "category-item";
@@ -213,6 +220,10 @@ function renderCategories() {
     const nameInput = document.createElement("input");
     nameInput.type = "text";
     nameInput.value = cat.name;
+
+    const count = document.createElement("div");
+    count.className = "helper category-count";
+    count.textContent = `${categoryCounts.get(cat.id) || 0} days`;
 
     const colorInput = document.createElement("input");
     colorInput.type = "color";
@@ -243,7 +254,7 @@ function renderCategories() {
       });
     });
 
-    item.append(swatch, nameInput, colorInput, saveButton, deleteButton);
+    item.append(swatch, nameInput, count, colorInput, saveButton, deleteButton);
     categoryList.appendChild(item);
   });
 }

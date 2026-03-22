@@ -181,6 +181,10 @@ label {
   padding: 0.55rem 0.7rem;
 }
 
+.inline-view-controls {
+  margin-left: 0.35rem;
+}
+
 .paint-toolbar {
   align-items: center;
   flex-wrap: wrap;
@@ -408,7 +412,7 @@ label {
 
 .category-item {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
   gap: 0.55rem;
   align-items: center;
   padding: 0.55rem;
@@ -419,6 +423,11 @@ label {
 
 .category-item input[type="text"] {
   min-width: 0;
+}
+
+.category-count {
+  min-width: 4.5rem;
+  text-align: right;
 }
 
 .category-item input[type="color"] {
@@ -440,6 +449,10 @@ label {
   .toolbar-left,
   .mode-tools {
     flex-wrap: wrap;
+  }
+
+  .inline-view-controls {
+    margin-left: 0;
   }
 }
 
