@@ -264,9 +264,10 @@ label {
 .month-grid,
 .month-view-grid,
 .week-grid {
+  --calendar-gap: 2px;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  gap: var(--calendar-gap);
 }
 
 .day-cell,
@@ -287,6 +288,11 @@ label {
   border-color: transparent;
   border-radius: 0;
   z-index: 1;
+}
+
+.day-cell.note-row-start,
+.day-card.note-row-start {
+  z-index: 2;
 }
 
 .day-cell.note-connect-left,
@@ -341,19 +347,6 @@ label {
   color: rgba(226, 232, 240, 0.9);
 }
 
-.day-cell.note::after {
-  content: attr(data-note);
-  position: absolute;
-  left: 5px;
-  right: 5px;
-  bottom: 3px;
-  font-size: 0.52rem;
-  color: rgba(2, 6, 23, 0.95);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .day-card {
   min-height: 80px;
   padding: 0.45rem;
@@ -373,6 +366,29 @@ label {
   margin-top: 0.45rem;
   font-size: 0.75rem;
   color: #082032;
+}
+
+.note-row-label {
+  --note-span: 1;
+  position: absolute;
+  left: 0.45rem;
+  bottom: 0.45rem;
+  width: calc((100% * var(--note-span)) + (var(--calendar-gap) * (var(--note-span) - 1)) - 0.9rem);
+  font-size: 0.75rem;
+  color: #082032;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.note-row-label-compact {
+  left: 5px;
+  bottom: 3px;
+  width: calc((100% * var(--note-span)) + (var(--calendar-gap) * (var(--note-span) - 1)) - 10px);
+  font-size: 0.52rem;
+  color: rgba(2, 6, 23, 0.95);
 }
 
 .day-cell.dim,

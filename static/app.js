@@ -132,6 +132,11 @@ function addDays(date, delta) {
   return result;
 }
 
+function dayDiff(startIso, endIso) {
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  return Math.round((parseDate(endIso) - parseDate(startIso)) / millisecondsPerDay);
+}
+
 function daysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
 }
@@ -202,6 +207,8 @@ function getNoteRangeShape(dateIso) {
 
   return {
     noteRange,
+    rowStart,
+    rowEnd,
     connectsLeft: rowStart < dateIso,
     connectsRight: rowEnd > dateIso,
     connectsUp,
@@ -595,12 +602,13 @@ function buildDayCell(dateObj, compact = true) {
   element.appendChild(title);
 
   if (noteRange?.note) {
-    if (compact) {
-      element.classList.add("note");
-      element.dataset.note = noteRange.note;
-    } else {
-      const note = document.createElement("p");
+    element.classList.add("note");
+    if (noteShape?.rowStart === iso) {
+      element.classList.add("note-row-start");
+      const note = document.createElement("div");
+      note.className = compact ? "note-row-label note-row-label-compact" : "note-row-label";
       note.textContent = noteRange.note;
+      note.style.setProperty("--note-span", String(dayDiff(noteShape.rowStart, noteShape.rowEnd) + 1));
       element.appendChild(note);
     }
   }
