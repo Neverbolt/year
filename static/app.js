@@ -200,10 +200,10 @@ function getNoteRangeShape(dateIso) {
     noteRange,
     connectsLeft: rowStart < dateIso,
     connectsRight: rowEnd > dateIso,
-    roundTopLeft: rowStart === dateIso,
-    roundBottomLeft: rowStart === dateIso,
-    roundTopRight: rowEnd === dateIso,
-    roundBottomRight: rowEnd === dateIso,
+    roundTopLeft: noteRange.start_date === dateIso,
+    roundBottomLeft: noteRange.start_date === dateIso,
+    roundTopRight: noteRange.end_date === dateIso,
+    roundBottomRight: noteRange.end_date === dateIso,
   };
 }
 
