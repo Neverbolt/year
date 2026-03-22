@@ -779,21 +779,41 @@ class AppState:
         return days
 
     async def fetch_note_ranges(self, user: Optional[AuthenticatedUser] = None) -> List[NoteRange]:
-        query = "SELECT id, start_date, end_date, note, version FROM note_ranges"
-        params: tuple[Any, ...] = ()
+        notes: List[NoteRange] = []
         if user and not user.is_admin:
             allowed = sorted(user.category_ids)
             if not allowed:
                 return []
             placeholders = ",".join("?" for _ in allowed)
-            query += (
-                f" WHERE EXISTS (SELECT 1 FROM days WHERE category_id IN ({placeholders}) "
-                "AND date BETWEEN note_ranges.start_date AND note_ranges.end_date)"
-            )
-            params = tuple(allowed)
-        query += " ORDER BY start_date, end_date, id"
-        notes: List[NoteRange] = []
-        async with self.db.execute(query, params) as cursor:
+            query = f"""
+                SELECT
+                    note_ranges.id,
+                    MIN(days.date) AS visible_start_date,
+                    MAX(days.date) AS visible_end_date,
+                    note_ranges.note,
+                    note_ranges.version
+                FROM note_ranges
+                JOIN days
+                    ON days.date BETWEEN note_ranges.start_date AND note_ranges.end_date
+                WHERE days.category_id IN ({placeholders})
+                GROUP BY note_ranges.id, note_ranges.note, note_ranges.version
+                ORDER BY visible_start_date, visible_end_date, note_ranges.id
+            """
+            async with self.db.execute(query, tuple(allowed)) as cursor:
+                async for row in cursor:
+                    if row[1] is None or row[2] is None:
+                        continue
+                    notes.append(
+                        NoteRange(int(row[0]), str(row[1]), str(row[2]), str(row[3]), int(row[4]))
+                    )
+            return notes
+
+        query = (
+            "SELECT id, start_date, end_date, note, version FROM note_ranges "
+            "ORDER BY start_date, end_date, id"
+        )
+        async with self.db.execute(query) as cursor:
+
             async for row in cursor:
                 notes.append(
                     NoteRange(int(row[0]), str(row[1]), str(row[2]), str(row[3]), int(row[4]))
