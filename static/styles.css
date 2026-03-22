@@ -615,3 +615,15 @@ select:disabled {
     display: grid;
   }
 }
+
+.read-only-user .topbar {
+  display: none;
+}
+
+.read-only-user .paint-meta {
+  min-width: 0;
+}
+
+.read-only-user #paintToolbarHint {
+  display: none;
+}

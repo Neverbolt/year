@@ -51,6 +51,8 @@ const categoryColorInput = document.getElementById("categoryColorInput");
 const categoryMessage = document.getElementById("categoryMessage");
 const suggestedColors = document.getElementById("suggestedColors");
 const brushPalette = document.getElementById("brushPalette");
+const paintToolbarTitle = document.getElementById("paintToolbarTitle");
+const paintToolbarHint = document.getElementById("paintToolbarHint");
 const userAdminSection = document.getElementById("userAdminSection");
 const userForm = document.getElementById("userForm");
 const userNameInput = document.getElementById("userNameInput");
@@ -91,13 +93,15 @@ function syncAccessUI() {
   const admin = isAdmin();
   userAdminSection.classList.toggle("hidden", !admin);
   addCategoryBtn.classList.toggle("hidden", !admin);
-  toggleCategories.textContent = admin ? "Categories" : "Browse";
-  toggleConfig.textContent = admin ? "Config" : "Account";
   document.body.classList.toggle("read-only-user", !admin);
   setButtonsDisabled(!admin, [addCategoryBtn, saveDayBtn, clearDayBtn]);
   passwordForm.querySelectorAll("input, button").forEach((element) => {
     element.disabled = !admin;
   });
+  paintToolbarTitle.textContent = admin ? "Quick assign" : "Filter";
+  paintToolbarHint.textContent = admin
+    ? "Click a category to arm it · drag like text selection · release to save the final range."
+    : "Click a category chip to filter the calendar.";
   passwordMessage.textContent = admin
     ? passwordMessage.textContent
     : "Read-only users cannot change system settings.";
@@ -240,22 +244,32 @@ function updateCategorySelects() {
 
 function renderBrushPalette() {
   brushPalette.innerHTML = "";
-  const options = [{ id: "", name: "Unassigned", color: "#020617" }, ...state.categories];
+  const options = isAdmin()
+    ? [{ id: "", name: "Unassigned", color: "#020617" }, ...state.categories]
+    : [{ id: "all", name: "All", color: "#020617" }, ...state.categories];
   options.forEach((option) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "brush-chip";
-    button.disabled = !isAdmin();
-    button.classList.toggle("active", String(state.brushCategoryId) === String(option.id));
+    const isActive = isAdmin()
+      ? String(state.brushCategoryId) === String(option.id)
+      : String(state.filterCategoryId) === String(option.id);
+    button.classList.toggle("active", isActive);
     button.innerHTML = `<span class="color-dot" style="background:${option.color}"></span><span>${option.name}</span>`;
     button.addEventListener("click", () => {
-      if (!isAdmin()) return;
-      if (String(state.brushCategoryId) === String(option.id)) {
-        state.brushCategoryId = null;
-      } else {
-        state.brushCategoryId = option.id;
+      if (isAdmin()) {
+        if (String(state.brushCategoryId) === String(option.id)) {
+          state.brushCategoryId = null;
+        } else {
+          state.brushCategoryId = option.id;
+        }
+        renderBrushPalette();
+        return;
       }
+      state.filterCategoryId = String(option.id);
+      categoryFilter.value = state.filterCategoryId;
       renderBrushPalette();
+      renderCalendar();
     });
     brushPalette.appendChild(button);
   });
