@@ -270,7 +270,7 @@ label {
   background: var(--surface-3);
   cursor: pointer;
   user-select: none;
-  touch-action: none;
+  touch-action: pan-y pan-x;
 }
 
 .day-cell {
@@ -626,4 +626,10 @@ select:disabled {
 
 .read-only-user #paintToolbarHint {
   display: none;
+}
+
+
+.paint-mode-active .day-cell,
+.paint-mode-active .day-card {
+  touch-action: none;
 }

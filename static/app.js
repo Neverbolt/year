@@ -638,7 +638,9 @@ function unbindCalendarHandlers() {
 }
 
 function syncCalendarHandlers() {
-  if (isAdmin() && state.brushCategoryId !== null) {
+  const paintModeActive = isAdmin() && state.brushCategoryId !== null;
+  document.body.classList.toggle("paint-mode-active", paintModeActive);
+  if (paintModeActive) {
     bindCalendarHandlers();
   } else {
     unbindCalendarHandlers();
