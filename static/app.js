@@ -72,6 +72,7 @@ const modals = {
 
 let reconnectTimer = null;
 let reconnectDelay = 500;
+let calendarHandlersBound = false;
 
 function isAdmin() {
   return state.userRole === "admin";
@@ -553,8 +554,6 @@ function buildDayCell(dateObj, compact = true) {
     }
   }
 
-  element.addEventListener("pointerdown", (event) => handleDayPointerStart(event, iso));
-  element.addEventListener("click", (event) => handleDayClick(event, iso));
   return element;
 }
 
@@ -624,9 +623,32 @@ function renderWeekView() {
   calendarEl.appendChild(grid);
 }
 
+function bindCalendarHandlers() {
+  if (calendarHandlersBound) return;
+  calendarEl.addEventListener("pointerdown", handleCalendarPointerDown);
+  calendarEl.addEventListener("click", handleCalendarClick);
+  calendarHandlersBound = true;
+}
+
+function unbindCalendarHandlers() {
+  if (!calendarHandlersBound) return;
+  calendarEl.removeEventListener("pointerdown", handleCalendarPointerDown);
+  calendarEl.removeEventListener("click", handleCalendarClick);
+  calendarHandlersBound = false;
+}
+
+function syncCalendarHandlers() {
+  if (isAdmin() && state.brushCategoryId !== null) {
+    bindCalendarHandlers();
+  } else {
+    unbindCalendarHandlers();
+  }
+}
+
 function renderCalendar() {
   updateViewButtons();
   renderBrushPalette();
+  syncCalendarHandlers();
   if (state.view === "year") {
     renderYearView();
   } else if (state.view === "month") {
@@ -745,6 +767,20 @@ function handleDayClick(event, iso) {
     }
   }
   setSelectedDate(parseDate(iso));
+}
+
+function handleCalendarClick(event) {
+  const target = event.target.closest?.("[data-date]");
+  const iso = target?.dataset?.date;
+  if (!iso) return;
+  handleDayClick(event, iso);
+}
+
+function handleCalendarPointerDown(event) {
+  const target = event.target.closest?.("[data-date]");
+  const iso = target?.dataset?.date;
+  if (!iso) return;
+  handleDayPointerStart(event, iso);
 }
 
 function handleDayPointerStart(event, iso) {
