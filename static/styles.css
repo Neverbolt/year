@@ -23,6 +23,7 @@ body {
   font-family: Inter, system-ui, -apple-system, sans-serif;
   background: radial-gradient(circle at top, #0f172a 0%, #020617 55%);
   color: var(--text);
+  overflow-x: hidden;
 }
 
 button,
@@ -163,6 +164,7 @@ label {
 .app-main {
   flex: 1;
   padding: 0.7rem;
+  min-width: 0;
 }
 
 .workbench {
@@ -188,6 +190,9 @@ label {
 .paint-toolbar {
   align-items: center;
   flex-wrap: wrap;
+  position: sticky;
+  top: 0.65rem;
+  z-index: 18;
 }
 
 .paint-meta {
@@ -229,6 +234,8 @@ label {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 0.55rem;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .calendar {
@@ -647,4 +654,20 @@ select:disabled {
 .day-card.today h4 {
   color: #fef08a;
   font-weight: 700;
+}
+
+.toolbar-left,
+.toolbar-right,
+.brand-block,
+.workbench {
+  min-width: 0;
+}
+
+#currentLabel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.read-only-user .paint-toolbar {
+  top: 0;
 }
