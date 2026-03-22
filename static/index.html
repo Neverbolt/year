@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Year Overview</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div id="authScreen" class="auth-screen">
+      <form id="loginForm" class="login-card stack">
+        <h1>Year Overview</h1>
+        <p class="helper">Private single-user calendar.</p>
+        <label>
+          Password
+          <input type="password" name="password" required autofocus />
+        </label>
+        <button type="submit">Sign in</button>
+        <p class="helper error-text" id="loginError"></p>
+      </form>
+    </div>
+
+    <div id="appShell" class="app-shell hidden">
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand">Year Overview</div>
+          <div class="status" id="connectionStatus">Offline</div>
+        </div>
+
+        <div class="topbar-tools">
+          <div class="view-controls">
+            <button class="view-btn" data-view="year">Year</button>
+            <button class="view-btn" data-view="month">Month</button>
+            <button class="view-btn" data-view="week">Week</button>
+          </div>
+          <button class="ghost" id="openCategories">Categories</button>
+          <button class="ghost" id="openConfig">Config</button>
+        </div>
+      </header>
+
+      <main class="app-layout">
+        <section class="command-bar panel">
+          <div class="command-row">
+            <div class="nav-group">
+              <button id="prevPeriod">◀</button>
+              <div id="currentLabel" class="current-label"></div>
+              <button id="nextPeriod">▶</button>
+            </div>
+
+            <div class="paint-summary">
+              <span class="paint-label">Brush</span>
+              <div id="brushStrip" class="brush-strip"></div>
+            </div>
+          </div>
+
+          <div class="command-row wrap">
+            <div class="mode-controls">
+              <button id="paintModeToggle" class="ghost active">Paint mode</button>
+              <button id="clearBrush" class="ghost">Unassigned brush</button>
+            </div>
+            <div class="range-hint" id="rangeHint">
+              Drag to paint. Shift-click paints a whole range from the last anchor.
+            </div>
+          </div>
+
+          <div class="command-row wrap compact">
+            <label>
+              Filter
+              <select id="categoryFilter"></select>
+            </label>
+            <label>
+              Selected day
+              <span id="selectedDayLabel" class="selected-day-label">None</span>
+            </label>
+            <label class="note-label">
+              Note
+              <input type="text" id="dayNote" maxlength="32" placeholder="1–3 words" />
+            </label>
+            <button id="saveDayNote">Save note</button>
+            <button id="clearDay" class="ghost">Clear day</button>
+            <span class="helper" id="dayMessage"></span>
+          </div>
+        </section>
+
+        <section class="calendar-shell panel">
+          <div id="calendar" class="calendar"></div>
+        </section>
+      </main>
+    </div>
+
+    <div id="modalBackdrop" class="modal-backdrop hidden"></div>
+
+    <dialog id="categoriesModal" class="modal-card">
+      <div class="modal-header">
+        <h2>Categories</h2>
+        <button class="ghost" data-close-modal="categoriesModal">Close</button>
+      </div>
+      <div class="stack">
+        <div id="categoryList" class="category-list"></div>
+        <button id="addCategory">Add category</button>
+      </div>
+    </dialog>
+
+    <dialog id="configModal" class="modal-card narrow">
+      <div class="modal-header">
+        <h2>Config</h2>
+        <button class="ghost" data-close-modal="configModal">Close</button>
+      </div>
+      <form id="passwordForm" class="stack">
+        <label>
+          Current password
+          <input type="password" id="currentPassword" required />
+        </label>
+        <label>
+          New password
+          <input type="password" id="newPassword" minlength="8" required />
+        </label>
+        <button type="submit">Update password</button>
+        <p class="helper" id="passwordMessage"></p>
+      </form>
+    </dialog>
+
+    <dialog id="categoryEditorModal" class="modal-card narrow">
+      <div class="modal-header">
+        <h2>New category</h2>
+        <button class="ghost" data-close-modal="categoryEditorModal">Close</button>
+      </div>
+      <form id="categoryForm" class="stack">
+        <label>
+          Name
+          <input type="text" id="categoryName" maxlength="32" required />
+        </label>
+        <label>
+          Color
+          <div class="color-picker-row">
+            <input type="color" id="categoryColorPicker" value="#64748b" />
+            <input type="text" id="categoryColorText" value="#64748b" pattern="^#[0-9a-fA-F]{6}$" />
+          </div>
+        </label>
+        <div>
+          <div class="helper">Suggestions</div>
+          <div id="suggestedColors" class="suggested-colors"></div>
+        </div>
+        <button type="submit">Create category</button>
+        <p class="helper" id="categoryFormMessage"></p>
+      </form>
+    </dialog>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
