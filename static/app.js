@@ -9,9 +9,6 @@ const state = {
   filterCategoryId: "all",
   palette: [],
   userVersion: null,
-  userRole: null,
-  managedUsers: [],
-  sessionActive: false,
   brushCategoryId: null,
   painting: false,
   dragStartDate: null,
@@ -42,24 +39,14 @@ const nextPeriod = document.getElementById("nextPeriod");
 const viewButtons = document.querySelectorAll(".view-btn");
 const toggleConfig = document.getElementById("toggleConfig");
 const toggleCategories = document.getElementById("toggleCategories");
-const logoutButton = document.getElementById("logoutButton");
+const passwordForm = document.getElementById("passwordForm");
+const passwordMessage = document.getElementById("passwordMessage");
 const categoryForm = document.getElementById("categoryForm");
 const categoryNameInput = document.getElementById("categoryNameInput");
 const categoryColorInput = document.getElementById("categoryColorInput");
 const categoryMessage = document.getElementById("categoryMessage");
 const suggestedColors = document.getElementById("suggestedColors");
 const brushPalette = document.getElementById("brushPalette");
-const paintToolbarTitle = document.getElementById("paintToolbarTitle");
-const paintToolbarHint = document.getElementById("paintToolbarHint");
-const userAdminSection = document.getElementById("userAdminSection");
-const userForm = document.getElementById("userForm");
-const userNameInput = document.getElementById("userNameInput");
-const userRoleInput = document.getElementById("userRoleInput");
-const userPasswordInput = document.getElementById("userPasswordInput");
-const newUserPermissions = document.getElementById("newUserPermissions");
-const newUserPermissionHint = document.getElementById("newUserPermissionHint");
-const userMessage = document.getElementById("userMessage");
-const userList = document.getElementById("userList");
 
 const modals = {
   categoriesModal: document.getElementById("categoriesModal"),
@@ -70,34 +57,10 @@ const modals = {
 
 let reconnectTimer = null;
 let reconnectDelay = 500;
-let calendarHandlersBound = false;
-
-function isAdmin() {
-  return state.userRole === "admin";
-}
 
 function setStatus(text, ok = false) {
   connectionStatus.textContent = text;
   connectionStatus.style.color = ok ? "#22c55e" : "#f97316";
-}
-
-function setButtonsDisabled(disabled, elements) {
-  elements.forEach((element) => {
-    if (!element) return;
-    element.disabled = disabled;
-  });
-}
-
-function syncAccessUI() {
-  const admin = isAdmin();
-  userAdminSection.classList.toggle("hidden", !admin);
-  addCategoryBtn.classList.toggle("hidden", !admin);
-  document.body.classList.toggle("read-only-user", !admin);
-  setButtonsDisabled(!admin, [addCategoryBtn, saveDayBtn, clearDayBtn]);
-  paintToolbarTitle.textContent = admin ? "Quick assign" : "Filter";
-  paintToolbarHint.textContent = admin
-    ? "Click a category to arm it · drag like text selection · release to save the final range."
-    : "Click a category chip to filter the calendar.";
 }
 
 function formatDate(date) {
@@ -110,10 +73,6 @@ function formatDate(date) {
 function parseDate(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
-}
-
-function todayIso() {
-  return formatDate(new Date());
 }
 
 function startOfWeek(date) {
@@ -159,7 +118,7 @@ function updateViewButtons() {
 
 function getCategoryColor(categoryId) {
   if (categoryId === "") return "#0f172a";
-  const category = state.categories.find((cat) => String(cat.id) === String(categoryId));
+  const category = state.categories.find((cat) => cat.id === categoryId);
   return category?.color || "#1f2937";
 }
 
@@ -170,39 +129,6 @@ function getEntry(dateIso) {
 function shouldDim(categoryId) {
   if (state.filterCategoryId === "all") return false;
   return String(categoryId) !== String(state.filterCategoryId);
-}
-
-function getSelectedPermissionIds(container) {
-  return [...container.querySelectorAll('input[type="checkbox"]:checked')].map((input) =>
-    Number(input.value)
-  );
-}
-
-function renderPermissionSelector(container, selectedIds = [], disabled = false) {
-  container.innerHTML = "";
-  if (!state.categories.length) {
-    const empty = document.createElement("p");
-    empty.className = "helper";
-    empty.textContent = "Create categories first to assign category visibility.";
-    container.appendChild(empty);
-    return;
-  }
-  state.categories.forEach((category) => {
-    const label = document.createElement("label");
-    label.className = "permission-chip";
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.value = String(category.id);
-    input.checked = selectedIds.includes(category.id);
-    input.disabled = disabled;
-    const dot = document.createElement("span");
-    dot.className = "color-dot";
-    dot.style.background = category.color;
-    const text = document.createElement("span");
-    text.textContent = category.name;
-    label.append(input, dot, text);
-    container.appendChild(label);
-  });
 }
 
 function updateCategorySelects() {
@@ -230,43 +156,24 @@ function updateCategorySelects() {
     categoryFilter.appendChild(option);
   });
   categoryFilter.value = state.filterCategoryId;
-
-  renderPermissionSelector(newUserPermissions, getSelectedPermissionIds(newUserPermissions));
-  if (userRoleInput.value === "admin") {
-    newUserPermissionHint.textContent = "Admins automatically see every category.";
-  } else {
-    newUserPermissionHint.textContent = "Read-only users only see the categories checked here. Admins always see everything.";
-  }
 }
 
 function renderBrushPalette() {
   brushPalette.innerHTML = "";
-  const options = isAdmin()
-    ? [{ id: "", name: "Unassigned", color: "#020617" }, ...state.categories]
-    : [{ id: "all", name: "All", color: "#020617" }, ...state.categories];
+  const options = [{ id: "", name: "Unassigned", color: "#020617" }, ...state.categories];
   options.forEach((option) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "brush-chip";
-    const isActive = isAdmin()
-      ? String(state.brushCategoryId) === String(option.id)
-      : String(state.filterCategoryId) === String(option.id);
-    button.classList.toggle("active", isActive);
+    button.classList.toggle("active", String(state.brushCategoryId) === String(option.id));
     button.innerHTML = `<span class="color-dot" style="background:${option.color}"></span><span>${option.name}</span>`;
     button.addEventListener("click", () => {
-      if (isAdmin()) {
-        if (String(state.brushCategoryId) === String(option.id)) {
-          state.brushCategoryId = null;
-        } else {
-          state.brushCategoryId = option.id;
-        }
-        renderBrushPalette();
-        return;
+      if (String(state.brushCategoryId) === String(option.id)) {
+        state.brushCategoryId = null;
+      } else {
+        state.brushCategoryId = option.id;
       }
-      state.filterCategoryId = String(option.id);
-      categoryFilter.value = state.filterCategoryId;
       renderBrushPalette();
-      renderCalendar();
     });
     brushPalette.appendChild(button);
   });
@@ -313,7 +220,6 @@ function renderCategories() {
     const nameInput = document.createElement("input");
     nameInput.type = "text";
     nameInput.value = cat.name;
-    nameInput.disabled = !isAdmin();
 
     const count = document.createElement("div");
     count.className = "helper category-count";
@@ -322,12 +228,10 @@ function renderCategories() {
     const colorInput = document.createElement("input");
     colorInput.type = "color";
     colorInput.value = cat.color;
-    colorInput.disabled = !isAdmin();
 
     const saveButton = document.createElement("button");
     saveButton.type = "button";
     saveButton.textContent = "Save";
-    saveButton.disabled = !isAdmin();
     saveButton.addEventListener("click", () => {
       sendMessage({
         type: "update_category",
@@ -342,7 +246,6 @@ function renderCategories() {
     deleteButton.type = "button";
     deleteButton.className = "ghost";
     deleteButton.textContent = "✕";
-    deleteButton.disabled = !isAdmin();
     deleteButton.addEventListener("click", () => {
       sendMessage({
         type: "delete_category",
@@ -356,143 +259,6 @@ function renderCategories() {
   });
 }
 
-function renderManagedUsers() {
-  userList.innerHTML = "";
-  if (!isAdmin()) return;
-  if (!state.managedUsers.length) {
-    const empty = document.createElement("p");
-    empty.className = "helper panel-block";
-    empty.textContent = "No users found yet.";
-    userList.appendChild(empty);
-    return;
-  }
-
-  state.managedUsers.forEach((managedUser) => {
-    const card = document.createElement("form");
-    card.className = "user-card panel-block stack compact";
-
-    const header = document.createElement("div");
-    header.className = "user-card-header";
-
-    const titleWrap = document.createElement("div");
-    const name = document.createElement("strong");
-    name.textContent = managedUser.name;
-    const meta = document.createElement("p");
-    meta.className = "helper";
-    meta.textContent = managedUser.role === "admin"
-      ? "Admin users can see everything and can edit the system."
-      : "Read-only users can only view the categories selected below.";
-    titleWrap.append(name, meta);
-
-    const badge = document.createElement("span");
-    badge.className = `role-badge ${managedUser.role}`;
-    badge.textContent = managedUser.role;
-    header.append(titleWrap, badge);
-
-    const roleLabel = document.createElement("label");
-    roleLabel.textContent = "Role";
-    const roleSelect = document.createElement("select");
-    roleSelect.innerHTML = `
-      <option value="readonly">Read only</option>
-      <option value="admin">Admin</option>
-    `;
-    roleSelect.value = managedUser.role;
-    roleLabel.appendChild(roleSelect);
-
-    const activeLabel = document.createElement("label");
-    activeLabel.className = "toggle-row";
-    const activeCheckbox = document.createElement("input");
-    activeCheckbox.type = "checkbox";
-    activeCheckbox.checked = Boolean(managedUser.isActive);
-    const activeText = document.createElement("span");
-    activeText.textContent = "User can sign in";
-    activeLabel.append(activeCheckbox, activeText);
-
-    const passwordLabel = document.createElement("label");
-    passwordLabel.textContent = "Replace password (optional)";
-    const passwordInput = document.createElement("input");
-    passwordInput.type = "password";
-    passwordInput.minLength = 8;
-    passwordInput.placeholder = "Leave blank to keep current password";
-    passwordLabel.appendChild(passwordInput);
-
-    const permissionsBlock = document.createElement("div");
-    permissionsBlock.className = "stack compact";
-    const permissionsTitle = document.createElement("div");
-    permissionsTitle.className = "helper";
-    permissionsTitle.textContent = "Category access";
-    const permissionsList = document.createElement("div");
-    permissionsList.className = "permission-list";
-    permissionsBlock.append(permissionsTitle, permissionsList);
-
-    const syncPermissions = () => {
-      const adminRole = roleSelect.value === "admin";
-      renderPermissionSelector(
-        permissionsList,
-        managedUser.categoryIds,
-        adminRole
-      );
-      permissionsTitle.textContent = adminRole
-        ? "Admins always see every category."
-        : "Checked categories are visible to this read-only user.";
-    };
-    syncPermissions();
-    roleSelect.addEventListener("change", syncPermissions);
-
-    const message = document.createElement("p");
-    message.className = "helper";
-
-    const saveButton = document.createElement("button");
-    saveButton.type = "submit";
-    saveButton.textContent = "Save user";
-
-    card.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      message.textContent = "";
-      const nextRole = roleSelect.value;
-      const payload = {
-        name: managedUser.name,
-        role: nextRole,
-        categoryIds: nextRole === "admin" ? [] : getSelectedPermissionIds(permissionsList),
-        expectedVersion: managedUser.version,
-        isActive: activeCheckbox.checked,
-      };
-      if (passwordInput.value.trim()) {
-        payload.password = passwordInput.value;
-      }
-      try {
-        await apiFetch(`/api/users/${managedUser.id}`, {
-          method: "PUT",
-          body: JSON.stringify(payload),
-        });
-        passwordInput.value = "";
-        message.textContent = "Saved.";
-        await fetchManagedUsers();
-      } catch (error) {
-        message.textContent = error.message;
-      }
-    });
-
-    card.append(header, roleLabel, activeLabel, passwordLabel, permissionsBlock, saveButton, message);
-    userList.appendChild(card);
-  });
-}
-
-async function fetchManagedUsers() {
-  if (!isAdmin()) {
-    state.managedUsers = [];
-    renderManagedUsers();
-    return;
-  }
-  try {
-    const data = await apiFetch("/api/users");
-    state.managedUsers = Array.isArray(data.users) ? data.users : [];
-    renderManagedUsers();
-  } catch (error) {
-    userMessage.textContent = error.message;
-  }
-}
-
 function setSelectedDate(date) {
   state.selectedDate = date;
   state.lastSelectedDate = formatDate(date);
@@ -502,13 +268,6 @@ function setSelectedDate(date) {
   dayTitle.textContent = date.toDateString();
   dayCategory.value = entry ? String(entry.category_id) : "";
   dayNote.value = entry?.note ?? "";
-  dayCategory.disabled = !isAdmin();
-  dayNote.disabled = !isAdmin();
-  saveDayBtn.disabled = !isAdmin();
-  clearDayBtn.disabled = !isAdmin();
-  if (!isAdmin()) {
-    dayMessage.textContent = "Read-only users can inspect day details but cannot edit them.";
-  }
   openModal("dayModal");
   renderCalendar();
 }
@@ -528,9 +287,6 @@ function buildDayCell(dateObj, compact = true) {
   }
   if (state.selectedDate && formatDate(state.selectedDate) === iso) {
     element.classList.add("selected");
-  }
-  if (iso === todayIso()) {
-    element.classList.add("today");
   }
   if (state.previewDates.has(iso)) {
     element.classList.add("painting");
@@ -553,6 +309,8 @@ function buildDayCell(dateObj, compact = true) {
     }
   }
 
+  element.addEventListener("pointerdown", (event) => handleDayPointerStart(event, iso));
+  element.addEventListener("click", (event) => handleDayClick(event, iso));
   return element;
 }
 
@@ -622,34 +380,9 @@ function renderWeekView() {
   calendarEl.appendChild(grid);
 }
 
-function bindCalendarHandlers() {
-  if (calendarHandlersBound) return;
-  calendarEl.addEventListener("pointerdown", handleCalendarPointerDown);
-  calendarEl.addEventListener("click", handleCalendarClick);
-  calendarHandlersBound = true;
-}
-
-function unbindCalendarHandlers() {
-  if (!calendarHandlersBound) return;
-  calendarEl.removeEventListener("pointerdown", handleCalendarPointerDown);
-  calendarEl.removeEventListener("click", handleCalendarClick);
-  calendarHandlersBound = false;
-}
-
-function syncCalendarHandlers() {
-  const paintModeActive = isAdmin() && state.brushCategoryId !== null;
-  document.body.classList.toggle("paint-mode-active", paintModeActive);
-  if (paintModeActive) {
-    bindCalendarHandlers();
-  } else {
-    unbindCalendarHandlers();
-  }
-}
-
 function renderCalendar() {
   updateViewButtons();
   renderBrushPalette();
-  syncCalendarHandlers();
   if (state.view === "year") {
     renderYearView();
   } else if (state.view === "month") {
@@ -703,7 +436,6 @@ function applyLocalDayState(date, categoryId, note) {
 }
 
 function sendDayUpdate(date, categoryId, note = null) {
-  if (!isAdmin()) return;
   const entry = getEntry(date);
   if ((categoryId === null || categoryId === "") && !entry) {
     return;
@@ -737,7 +469,7 @@ function setPreviewRange(startIso, currentIso) {
 }
 
 function commitPreviewRange() {
-  if (!isAdmin() || !state.previewDates.size || state.brushCategoryId === null) return;
+  if (!state.previewDates.size || state.brushCategoryId === null) return;
   const categoryId = state.brushCategoryId === "" ? null : state.brushCategoryId;
   state.previewDates.forEach((date) => {
     sendDayUpdate(date, categoryId);
@@ -746,7 +478,7 @@ function commitPreviewRange() {
 }
 
 function handleRangeAssign(targetIso) {
-  if (!isAdmin() || !state.lastSelectedDate) return false;
+  if (!state.lastSelectedDate) return false;
   const range = dateRange(state.lastSelectedDate, targetIso);
   range.forEach((date) => {
     sendDayUpdate(date, state.brushCategoryId === "" ? null : state.brushCategoryId);
@@ -770,22 +502,8 @@ function handleDayClick(event, iso) {
   setSelectedDate(parseDate(iso));
 }
 
-function handleCalendarClick(event) {
-  const target = event.target.closest?.("[data-date]");
-  const iso = target?.dataset?.date;
-  if (!iso) return;
-  handleDayClick(event, iso);
-}
-
-function handleCalendarPointerDown(event) {
-  const target = event.target.closest?.("[data-date]");
-  const iso = target?.dataset?.date;
-  if (!iso) return;
-  handleDayPointerStart(event, iso);
-}
-
 function handleDayPointerStart(event, iso) {
-  if (!isAdmin() || state.brushCategoryId === null) return;
+  if (state.brushCategoryId === null) return;
   if (event.pointerType === "mouse" && event.button !== 0) return;
   event.preventDefault();
   state.painting = true;
@@ -821,20 +539,11 @@ function stopPainting() {
   renderCalendar();
 }
 
-async function syncAdminData() {
-  syncAccessUI();
-  renderManagedUsers();
-  if (isAdmin()) {
-    await fetchManagedUsers();
-  }
-}
-
-async function handleSnapshot(data) {
+function handleSnapshot(data) {
   state.categories = data.categories || [];
   state.days = new Map((data.days || []).map((entry) => [entry.date, entry]));
   state.palette = data.palette || [];
   state.userVersion = data.user?.version ?? null;
-  state.userRole = data.user?.role ?? state.userRole;
   if (
     state.brushCategoryId !== null &&
     !["", ...state.categories.map((cat) => String(cat.id))].includes(String(state.brushCategoryId))
@@ -845,36 +554,11 @@ async function handleSnapshot(data) {
   renderCategories();
   renderSuggestedColors();
   renderCalendar();
-  await syncAdminData();
 }
 
 function sendMessage(payload) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
   state.ws.send(JSON.stringify(payload));
-}
-
-async function apiFetch(url, options = {}) {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
-  if (state.token) {
-    headers.Authorization = `Bearer ${state.token}`;
-  }
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-  if (!response.ok) {
-    let message = response.statusText || "Request failed";
-    try {
-      message = await response.text();
-    } catch (_error) {
-      // ignore body parsing errors
-    }
-    throw new Error(message.replaceAll("_", " "));
-  }
-  return response.json();
 }
 
 function connectWebSocket() {
@@ -884,19 +568,18 @@ function connectWebSocket() {
   state.ws.addEventListener("open", () => {
     setStatus("Connected", true);
     reconnectDelay = 500;
-    if (state.token) sendMessage({ type: "auth", token: state.token });
+    sendMessage({ type: "auth", token: state.token });
   });
 
-  state.ws.addEventListener("message", async (event) => {
+  state.ws.addEventListener("message", (event) => {
     const data = JSON.parse(event.data);
-    if (data.type === "snapshot") await handleSnapshot(data);
+    if (data.type === "snapshot") handleSnapshot(data);
     if (data.type === "category_created") {
       state.categories.push(data.category);
       updateCategorySelects();
       renderCategories();
       renderSuggestedColors();
       renderCalendar();
-      renderManagedUsers();
     }
     if (data.type === "category_updated") {
       const index = state.categories.findIndex((cat) => cat.id === data.category.id);
@@ -905,7 +588,6 @@ function connectWebSocket() {
       renderCategories();
       renderSuggestedColors();
       renderCalendar();
-      renderManagedUsers();
     }
     if (data.type === "category_deleted") {
       state.categories = state.categories.filter((cat) => cat.id !== data.id);
@@ -913,7 +595,6 @@ function connectWebSocket() {
       renderCategories();
       renderSuggestedColors();
       renderCalendar();
-      renderManagedUsers();
     }
     if (data.type === "day_updated") {
       state.days.set(data.day.date, data.day);
@@ -933,14 +614,16 @@ function connectWebSocket() {
       }
     }
     if (data.type === "password_updated") {
+      passwordMessage.textContent = "Password updated.";
       if (data.user?.version) state.userVersion = data.user.version;
     }
     if (data.type === "error") {
       const message = data.message.replaceAll("_", " ");
-      if (data.message.startsWith("invalid_") || data.message === "category_in_use") {
+      if (["invalid_credentials", "password_too_short"].includes(data.message)) {
+        passwordMessage.textContent = message;
+      } else if (data.message.startsWith("invalid_") || data.message === "category_in_use") {
         categoryMessage.textContent = message;
         dayMessage.textContent = message;
-        userMessage.textContent = message;
       } else {
         dayMessage.textContent = message;
       }
@@ -950,7 +633,6 @@ function connectWebSocket() {
   state.ws.addEventListener("close", () => {
     setStatus("Disconnected");
     if (reconnectTimer) clearTimeout(reconnectTimer);
-    if (!state.sessionActive) return;
     reconnectTimer = setTimeout(() => {
       reconnectDelay = Math.min(reconnectDelay * 2, 5000);
       connectWebSocket();
@@ -966,58 +648,7 @@ async function login(password) {
   });
   if (!response.ok) throw new Error("Invalid credentials");
   const data = await response.json();
-  state.token = null;
-  state.userRole = data.role || null;
-}
-
-function showAppShell() {
-  state.sessionActive = true;
-  document.body.classList.remove("auth-only");
-  loginScreen.classList.add("hidden");
-  appShell.classList.remove("hidden");
-}
-
-function showLoginScreen() {
-  state.sessionActive = false;
-  document.body.classList.add("auth-only");
-  loginScreen.classList.remove("hidden");
-  appShell.classList.add("hidden");
-}
-
-async function restoreSession() {
-  try {
-    const me = await apiFetch("/api/me", { headers: {} });
-    state.userRole = me.role || null;
-    state.userVersion = me.version ?? null;
-    showAppShell();
-    if (state.userRole === "admin") await fetchManagedUsers();
-    connectWebSocket();
-    return true;
-  } catch (_error) {
-    showLoginScreen();
-    return false;
-  }
-}
-
-async function logout() {
-  try {
-    await fetch("/api/logout", { method: "POST" });
-  } finally {
-    state.sessionActive = false;
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    state.token = null;
-    state.userRole = null;
-    state.userVersion = null;
-    state.managedUsers = [];
-    state.categories = [];
-    state.days = new Map();
-    if (state.ws) state.ws.close();
-    closeAllModals();
-    renderManagedUsers();
-    renderCategories();
-    renderCalendar();
-    showLoginScreen();
-  }
+  state.token = data.token;
 }
 
 loginForm.addEventListener("submit", async (event) => {
@@ -1026,8 +657,9 @@ loginForm.addEventListener("submit", async (event) => {
   try {
     await login(String(new FormData(loginForm).get("password")));
     loginForm.reset();
-    showAppShell();
-    if (state.userRole === "admin") await fetchManagedUsers();
+    document.body.classList.remove("auth-only");
+    loginScreen.classList.add("hidden");
+    appShell.classList.remove("hidden");
     connectWebSocket();
   } catch (_error) {
     loginError.textContent = "Login failed.";
@@ -1044,7 +676,6 @@ addCategoryBtn.addEventListener("click", () => {
 
 categoryForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  if (!isAdmin()) return;
   sendMessage({
     type: "create_category",
     name: categoryNameInput.value.trim(),
@@ -1054,7 +685,7 @@ categoryForm.addEventListener("submit", (event) => {
 });
 
 saveDayBtn.addEventListener("click", () => {
-  if (!state.selectedDate || !isAdmin()) return;
+  if (!state.selectedDate) return;
   const iso = formatDate(state.selectedDate);
   sendDayUpdate(iso, dayCategory.value || null, dayNote.value.trim() || null);
   dayMessage.textContent = "Saved.";
@@ -1062,7 +693,7 @@ saveDayBtn.addEventListener("click", () => {
 });
 
 clearDayBtn.addEventListener("click", () => {
-  if (!state.selectedDate || !isAdmin()) return;
+  if (!state.selectedDate) return;
   const iso = formatDate(state.selectedDate);
   if (!getEntry(iso)) {
     dayMessage.textContent = "No entry to clear.";
@@ -1098,47 +729,19 @@ viewButtons.forEach((button) => {
   });
 });
 
-userRoleInput.addEventListener("change", () => {
-  const role = userRoleInput.value;
-  const disablePermissions = role === "admin";
-  newUserPermissionHint.textContent = disablePermissions
-    ? "Admins automatically see every category."
-    : "Read-only users only see the categories checked here. Admins always see everything.";
-  newUserPermissions.querySelectorAll('input[type="checkbox"]').forEach((input) => {
-    input.disabled = disablePermissions;
-    if (disablePermissions) input.checked = false;
-  });
-});
-
-userForm.addEventListener("submit", async (event) => {
+passwordForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  userMessage.textContent = "";
-  try {
-    await apiFetch("/api/users", {
-      method: "POST",
-      body: JSON.stringify({
-        name: userNameInput.value.trim(),
-        role: userRoleInput.value,
-        password: userPasswordInput.value,
-        categoryIds: userRoleInput.value === "admin" ? [] : getSelectedPermissionIds(newUserPermissions),
-      }),
-    });
-    userForm.reset();
-    userRoleInput.value = "readonly";
-    updateCategorySelects();
-    userMessage.textContent = "User created.";
-    await fetchManagedUsers();
-  } catch (error) {
-    userMessage.textContent = error.message;
-  }
+  passwordMessage.textContent = "";
+  sendMessage({
+    type: "update_password",
+    currentPassword: document.getElementById("currentPassword").value,
+    newPassword: document.getElementById("newPassword").value,
+    expectedVersion: state.userVersion,
+  });
+  passwordForm.reset();
 });
 
-logoutButton.addEventListener("click", logout);
-
-toggleConfig.addEventListener("click", async () => {
-  if (isAdmin()) await fetchManagedUsers();
-  openModal("configModal");
-});
+toggleConfig.addEventListener("click", () => openModal("configModal"));
 toggleCategories.addEventListener("click", () => openModal("categoriesModal"));
 document.querySelectorAll("[data-close-modal]").forEach((element) => {
   element.addEventListener("click", () => closeModal(element.dataset.closeModal));
@@ -1157,9 +760,6 @@ document.addEventListener("keydown", (event) => {
 });
 
 setStatus("Offline");
-syncAccessUI();
 updateViewButtons();
 renderBrushPalette();
 renderCalendar();
-renderManagedUsers();
-restoreSession();

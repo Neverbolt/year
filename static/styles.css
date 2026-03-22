@@ -23,7 +23,6 @@ body {
   font-family: Inter, system-ui, -apple-system, sans-serif;
   background: radial-gradient(circle at top, #0f172a 0%, #020617 55%);
   color: var(--text);
-  overflow-x: hidden;
 }
 
 button,
@@ -164,7 +163,6 @@ label {
 .app-main {
   flex: 1;
   padding: 0.7rem;
-  min-width: 0;
 }
 
 .workbench {
@@ -190,9 +188,6 @@ label {
 .paint-toolbar {
   align-items: center;
   flex-wrap: wrap;
-  position: sticky;
-  top: 0.65rem;
-  z-index: 18;
 }
 
 .paint-meta {
@@ -234,8 +229,6 @@ label {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 0.55rem;
-  min-width: 0;
-  overflow: hidden;
 }
 
 .calendar {
@@ -277,7 +270,7 @@ label {
   background: var(--surface-3);
   cursor: pointer;
   user-select: none;
-  touch-action: pan-y pan-x;
+  touch-action: none;
 }
 
 .day-cell {
@@ -485,189 +478,4 @@ label {
     min-height: 74px;
     padding: 0.45rem;
   }
-}
-
-.config-sections {
-  gap: 1rem;
-}
-
-.config-section {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 0.8rem;
-  background: rgba(2, 6, 23, 0.35);
-}
-
-.config-section h3 {
-  margin: 0 0 0.35rem;
-}
-
-.section-header {
-  margin-bottom: 0.75rem;
-}
-
-.panel-block {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 0.75rem;
-  background: var(--surface-2);
-}
-
-.two-column-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
-}
-
-.permission-fieldset {
-  margin: 0;
-  padding: 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-
-.permission-fieldset legend {
-  padding: 0 0.35rem;
-  color: var(--muted);
-}
-
-.permission-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.permission-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.45rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-3);
-  color: var(--text);
-}
-
-.permission-chip input {
-  width: auto;
-  margin: 0;
-}
-
-.user-list {
-  display: grid;
-  gap: 0.75rem;
-  margin-top: 0.85rem;
-}
-
-.user-card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.role-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border: 1px solid var(--border);
-}
-
-.role-badge.admin {
-  color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.45);
-  background: rgba(56, 189, 248, 0.12);
-}
-
-.role-badge.readonly {
-  color: #facc15;
-  border-color: rgba(250, 204, 21, 0.35);
-  background: rgba(250, 204, 21, 0.08);
-}
-
-.toggle-row {
-  flex-direction: row;
-  align-items: center;
-}
-
-.toggle-row input {
-  width: auto;
-}
-
-.read-only-user #paintToolbar {
-  opacity: 0.65;
-}
-
-.read-only-user .day-cell,
-.read-only-user .day-card {
-  cursor: pointer;
-}
-
-button:disabled,
-input:disabled,
-select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-@media (max-width: 640px) {
-  .two-column-grid,
-  .user-card-header {
-    grid-template-columns: 1fr;
-    display: grid;
-  }
-}
-
-.read-only-user .topbar {
-  display: none;
-}
-
-.read-only-user .paint-meta {
-  min-width: 0;
-}
-
-.read-only-user #paintToolbarHint {
-  display: none;
-}
-
-
-.paint-mode-active .day-cell,
-.paint-mode-active .day-card {
-  touch-action: none;
-}
-
-.compact-header {
-  margin-bottom: 0.5rem;
-}
-
-.day-cell.today,
-.day-card.today {
-  box-shadow: inset 0 0 0 2px rgba(250, 204, 21, 0.95);
-}
-
-.day-cell.today span,
-.day-card.today h4 {
-  color: #fef08a;
-  font-weight: 700;
-}
-
-.toolbar-left,
-.toolbar-right,
-.brand-block,
-.workbench {
-  min-width: 0;
-}
-
-#currentLabel {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.read-only-user .paint-toolbar {
-  top: 0;
 }
