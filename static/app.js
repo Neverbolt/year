@@ -791,6 +791,16 @@ function sendNoteRangeCreate(startDate, endDate, note) {
   });
 }
 
+function sendNoteRangeUpdate(id, note, expectedVersion) {
+  if (!isAdmin()) return;
+  sendMessage({
+    type: "update_note_range",
+    id,
+    note,
+    expectedVersion,
+  });
+}
+
 function dateRange(startIso, endIso) {
   const start = parseDate(startIso);
   const end = parseDate(endIso);
@@ -1027,6 +1037,19 @@ function connectWebSocket() {
         state.pendingNoteRange = null;
       }
     }
+    if (data.type === "note_range_updated") {
+      const index = state.noteRanges.findIndex((range) => range.id === data.noteRange.id);
+      if (index !== -1) {
+        state.noteRanges[index] = data.noteRange;
+      } else {
+        state.noteRanges.push(data.noteRange);
+      }
+      if (state.selectedNoteRangeId === data.noteRange.id) {
+        dayNote.value = data.noteRange.note;
+        dayMessage.textContent = "Saved.";
+      }
+      renderCalendar();
+    }
     if (data.type === "note_range_deleted") {
       state.noteRanges = state.noteRanges.filter((range) => range.id !== data.id);
       if (state.selectedNoteRangeId === data.id) {
@@ -1171,7 +1194,13 @@ saveDayBtn.addEventListener("click", () => {
     dayMessage.textContent = "Saving.";
     return;
   }
-  dayMessage.textContent = "Editing existing notes is not supported yet.";
+  const selectedRange = state.noteRanges.find((range) => range.id === state.selectedNoteRangeId);
+  if (!selectedRange) {
+    dayMessage.textContent = "No note selected.";
+    return;
+  }
+  sendNoteRangeUpdate(selectedRange.id, note, selectedRange.version);
+  dayMessage.textContent = "Saving.";
 });
 
 clearDayBtn.addEventListener("click", () => {
