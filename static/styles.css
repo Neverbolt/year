@@ -154,9 +154,7 @@ label {
 }
 
 .view-btn.active,
-.brush-chip.active,
-.day-cell.selected,
-.day-card.selected {
+.brush-chip.active {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

@@ -574,9 +574,6 @@ function buildDayCell(dateObj, compact = true) {
   } else if (!entry && state.filterCategoryId !== "all") {
     element.classList.add("dim");
   }
-  if (state.selectedDate && formatDate(state.selectedDate) === iso) {
-    element.classList.add("selected");
-  }
   if (iso === todayIso()) {
     element.classList.add("today");
   }
