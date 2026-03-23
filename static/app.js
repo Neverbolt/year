@@ -36,8 +36,6 @@ const addDayLabelBtn = document.getElementById("addDayLabel");
 const calendarEl = document.getElementById("calendar");
 const dayTitle = document.getElementById("dayTitle");
 const dayLabelSelect = document.getElementById("dayLabelSelect");
-const saveDayLabelBtn = document.getElementById("saveDayLabel");
-const clearDayLabelBtn = document.getElementById("clearDayLabel");
 const dayNote = document.getElementById("dayNote");
 const dayMessage = document.getElementById("dayMessage");
 const saveDayBtn = document.getElementById("saveDay");
@@ -105,7 +103,7 @@ function syncAccessUI() {
   addCategoryBtn.classList.toggle("hidden", !admin);
   addDayLabelBtn.classList.toggle("hidden", !admin);
   document.body.classList.toggle("read-only-user", !admin);
-  setButtonsDisabled(!admin, [addCategoryBtn, addDayLabelBtn, saveDayBtn, clearDayBtn, saveDayLabelBtn, clearDayLabelBtn]);
+  setButtonsDisabled(!admin, [addCategoryBtn, addDayLabelBtn, saveDayBtn, clearDayBtn, dayLabelSelect]);
   paintToolbarTitle.textContent = admin ? "Quick assign" : "Filter";
   paintToolbarHint.textContent = admin
     ? "Pick a category or Notes · drag like text selection · release to save the final range."
@@ -645,8 +643,6 @@ function setSelectedDate(date) {
   renderDayLabelSelect();
   dayLabelSelect.value = entry?.label_id ? String(entry.label_id) : "";
   dayLabelSelect.disabled = !isAdmin();
-  saveDayLabelBtn.disabled = !isAdmin();
-  clearDayLabelBtn.disabled = !isAdmin() || !entry?.label_id;
   dayNote.value = noteRange?.note ?? "";
   dayNote.disabled = !isAdmin();
   saveDayBtn.disabled = !isAdmin() || !noteRange;
@@ -1159,7 +1155,6 @@ function connectWebSocket() {
       renderCategories();
       if (state.selectedDate && formatDate(state.selectedDate) === data.day.date) {
         dayLabelSelect.value = data.day.label_id ? String(data.day.label_id) : "";
-        clearDayLabelBtn.disabled = !isAdmin() || !data.day.label_id;
         dayMessage.textContent = "Saved.";
       }
       renderCalendar();
@@ -1170,7 +1165,6 @@ function connectWebSocket() {
       renderCategories();
       if (state.selectedDate && formatDate(state.selectedDate) === data.date) {
         dayLabelSelect.value = "";
-        clearDayLabelBtn.disabled = true;
       }
       renderCalendar();
     }
@@ -1333,11 +1327,15 @@ categoryForm.addEventListener("submit", (event) => {
   closeModal("categoryModal");
 });
 
-saveDayLabelBtn.addEventListener("click", () => {
+dayLabelSelect.addEventListener("change", () => {
   if (!isAdmin() || !state.selectedDate) return;
   const iso = formatDate(state.selectedDate);
   const entry = getEntry(iso);
   const labelId = dayLabelSelect.value ? Number(dayLabelSelect.value) : null;
+  const currentLabelId = entry?.label_id ?? null;
+  if (currentLabelId === labelId) {
+    return;
+  }
   sendMessage({
     type: "set_day",
     date: iso,
@@ -1345,26 +1343,7 @@ saveDayLabelBtn.addEventListener("click", () => {
     labelId,
     expectedVersion: entry?.version ?? null,
   });
-  dayMessage.textContent = "Saving label.";
-});
-
-clearDayLabelBtn.addEventListener("click", () => {
-  if (!isAdmin() || !state.selectedDate) return;
-  dayLabelSelect.value = "";
-  const iso = formatDate(state.selectedDate);
-  const entry = getEntry(iso);
-  if (!entry) {
-    dayMessage.textContent = "No day entry to clear.";
-    return;
-  }
-  sendMessage({
-    type: "set_day",
-    date: iso,
-    categoryId: entry.category_id,
-    labelId: null,
-    expectedVersion: entry.version,
-  });
-  dayMessage.textContent = "Clearing label.";
+  dayMessage.textContent = labelId === null ? "Clearing label." : "Saving label.";
 });
 
 saveDayBtn.addEventListener("click", () => {
