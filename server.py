@@ -157,6 +157,12 @@ class NoteRangeCreatedMessage:
 
 
 @dataclass(frozen=True)
+class NoteRangeUpdatedMessage:
+    type: str
+    noteRange: NoteRange
+
+
+@dataclass(frozen=True)
 class NoteRangeDeletedMessage:
     type: str
     id: int
@@ -335,6 +341,33 @@ class DeleteNoteRangeMessage:
         except (TypeError, ValueError):
             return None, "invalid_note"
         return DeleteNoteRangeMessage(id=note_id, expected_version=expected_version), ""
+
+
+@dataclass(frozen=True)
+class UpdateNoteRangeMessage:
+    id: int
+    note: str
+    expected_version: int
+
+    @staticmethod
+    def parse(payload: Dict[str, Any]) -> Tuple[Optional["UpdateNoteRangeMessage"], str]:
+        note_value = payload.get("id")
+        version_value = payload.get("expectedVersion")
+        note = payload.get("note")
+        if not isinstance(note_value, (int, str)) or not isinstance(version_value, (int, str)):
+            return None, "invalid_note"
+        if not isinstance(note, str) or not note.strip():
+            return None, "invalid_note"
+        try:
+            note_id = int(note_value)
+            expected_version = int(version_value)
+        except (TypeError, ValueError):
+            return None, "invalid_note"
+        return UpdateNoteRangeMessage(
+            id=note_id,
+            note=note.strip(),
+            expected_version=expected_version,
+        ), ""
 
 
 @dataclass(frozen=True)
@@ -675,6 +708,7 @@ def parse_message(payload: Dict[str, Any]) -> tuple[str, Any, str]:
         "delete_category": DeleteCategoryMessage.parse,
         "set_day": SetDayMessage.parse,
         "create_note_range": CreateNoteRangeMessage.parse,
+        "update_note_range": UpdateNoteRangeMessage.parse,
         "delete_note_range": DeleteNoteRangeMessage.parse,
         "update_password": UpdatePasswordMessage.parse,
     }
@@ -998,6 +1032,36 @@ class AppState:
             await self.db.rollback()
             raise
         return NoteRange(int(id_row[0]), start_date, end_date, note, 1)
+
+    async def update_note_range(
+        self, note_id: int, note: str, expected_version: int
+    ) -> NoteRange:
+        await self.db.execute("BEGIN")
+        try:
+            cursor = await self.db.execute(
+                """
+                UPDATE note_ranges
+                SET note = ?, version = version + 1
+                WHERE id = ? AND version = ?
+                """,
+                (note, note_id, expected_version),
+            )
+            if cursor.rowcount != 1:
+                await self.db.rollback()
+                raise ValueError("version_conflict")
+            async with self.db.execute(
+                "SELECT id, start_date, end_date, note, version FROM note_ranges WHERE id = ?",
+                (note_id,),
+            ) as range_cursor:
+                row = await range_cursor.fetchone()
+            if not row:
+                await self.db.rollback()
+                raise ValueError("note_not_found")
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+        return NoteRange(int(row[0]), str(row[1]), str(row[2]), str(row[3]), int(row[4]))
 
     async def delete_note_range(self, note_id: int, expected_version: int) -> None:
         await self.db.execute("BEGIN")
@@ -1513,6 +1577,23 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                         continue
                     await state.broadcast_filtered(
                         lambda user: NoteRangeCreatedMessage(type="note_range_created", noteRange=note_range)
+                        if user.is_admin
+                        else None
+                    )
+                    await state.refresh_readonly_sessions()
+                case UpdateNoteRangeMessage(id=note_id, note=note, expected_version=expected_version):
+                    if not active_user.is_admin:
+                        await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
+                        continue
+                    try:
+                        note_range = await state.update_note_range(note_id, note, expected_version)
+                    except ValueError as exc:
+                        await ws.send_str(
+                            encode_message(ErrorMessage(type="error", message=str(exc)))
+                        )
+                        continue
+                    await state.broadcast_filtered(
+                        lambda user: NoteRangeUpdatedMessage(type="note_range_updated", noteRange=note_range)
                         if user.is_admin
                         else None
                     )

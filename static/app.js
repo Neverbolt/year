@@ -132,6 +132,11 @@ function addDays(date, delta) {
   return result;
 }
 
+function dayDiff(startIso, endIso) {
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  return Math.round((parseDate(endIso) - parseDate(startIso)) / millisecondsPerDay);
+}
+
 function daysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
 }
@@ -180,6 +185,39 @@ function getNoteRangeForDate(dateIso) {
       (range) => range.start_date <= dateIso && dateIso <= range.end_date
     ) || null
   );
+}
+
+function getNoteRangeShape(dateIso) {
+  const noteRange = getNoteRangeForDate(dateIso);
+  if (!noteRange) {
+    return null;
+  }
+
+  const date = parseDate(dateIso);
+  const weekDay = (date.getDay() + 6) % 7;
+  const weekStart = addDays(date, -weekDay);
+  const weekEnd = addDays(weekStart, 6);
+  const previousWeekIso = formatDate(addDays(date, -7));
+  const nextWeekIso = formatDate(addDays(date, 7));
+
+  const rowStart = noteRange.start_date > formatDate(weekStart) ? noteRange.start_date : formatDate(weekStart);
+  const rowEnd = noteRange.end_date < formatDate(weekEnd) ? noteRange.end_date : formatDate(weekEnd);
+  const connectsUp = noteRange.start_date <= previousWeekIso && previousWeekIso <= noteRange.end_date;
+  const connectsDown = noteRange.start_date <= nextWeekIso && nextWeekIso <= noteRange.end_date;
+
+  return {
+    noteRange,
+    rowStart,
+    rowEnd,
+    connectsLeft: rowStart < dateIso,
+    connectsRight: rowEnd > dateIso,
+    connectsUp,
+    connectsDown,
+    roundTopLeft: rowStart === dateIso && !connectsUp,
+    roundBottomLeft: rowStart === dateIso && !connectsDown,
+    roundTopRight: rowEnd === dateIso && !connectsUp,
+    roundBottomRight: rowEnd === dateIso && !connectsDown,
+  };
 }
 
 function shouldDim(categoryId) {
@@ -524,7 +562,8 @@ function setSelectedDate(date) {
 function buildDayCell(dateObj, compact = true) {
   const iso = formatDate(dateObj);
   const entry = getEntry(iso);
-  const noteRange = getNoteRangeForDate(iso);
+  const noteShape = getNoteRangeShape(iso);
+  const noteRange = noteShape?.noteRange ?? null;
   const element = document.createElement("div");
   element.className = compact ? "day-cell" : "day-card";
   element.dataset.date = iso;
@@ -535,14 +574,22 @@ function buildDayCell(dateObj, compact = true) {
   } else if (!entry && state.filterCategoryId !== "all") {
     element.classList.add("dim");
   }
-  if (state.selectedDate && formatDate(state.selectedDate) === iso) {
-    element.classList.add("selected");
-  }
   if (iso === todayIso()) {
     element.classList.add("today");
   }
   if (state.previewDates.has(iso)) {
     element.classList.add("painting");
+  }
+  if (noteShape) {
+    element.classList.add("note-range");
+    element.classList.toggle("note-connect-left", noteShape.connectsLeft);
+    element.classList.toggle("note-connect-right", noteShape.connectsRight);
+    element.classList.toggle("note-connect-up", noteShape.connectsUp);
+    element.classList.toggle("note-connect-down", noteShape.connectsDown);
+    element.classList.toggle("note-round-top-left", noteShape.roundTopLeft);
+    element.classList.toggle("note-round-bottom-left", noteShape.roundBottomLeft);
+    element.classList.toggle("note-round-top-right", noteShape.roundTopRight);
+    element.classList.toggle("note-round-bottom-right", noteShape.roundBottomRight);
   }
 
   const title = document.createElement(compact ? "span" : "h4");
@@ -552,12 +599,13 @@ function buildDayCell(dateObj, compact = true) {
   element.appendChild(title);
 
   if (noteRange?.note) {
-    if (compact) {
-      element.classList.add("note");
-      element.dataset.note = noteRange.note;
-    } else {
-      const note = document.createElement("p");
+    element.classList.add("note");
+    if (noteShape?.rowStart === iso) {
+      element.classList.add("note-row-start");
+      const note = document.createElement("div");
+      note.className = compact ? "note-row-label note-row-label-compact" : "note-row-label";
       note.textContent = noteRange.note;
+      note.style.setProperty("--note-span", String(dayDiff(noteShape.rowStart, noteShape.rowEnd) + 1));
       element.appendChild(note);
     }
   }
@@ -737,6 +785,16 @@ function sendNoteRangeCreate(startDate, endDate, note) {
     startDate,
     endDate,
     note,
+  });
+}
+
+function sendNoteRangeUpdate(id, note, expectedVersion) {
+  if (!isAdmin()) return;
+  sendMessage({
+    type: "update_note_range",
+    id,
+    note,
+    expectedVersion,
   });
 }
 
@@ -976,6 +1034,19 @@ function connectWebSocket() {
         state.pendingNoteRange = null;
       }
     }
+    if (data.type === "note_range_updated") {
+      const index = state.noteRanges.findIndex((range) => range.id === data.noteRange.id);
+      if (index !== -1) {
+        state.noteRanges[index] = data.noteRange;
+      } else {
+        state.noteRanges.push(data.noteRange);
+      }
+      if (state.selectedNoteRangeId === data.noteRange.id) {
+        dayNote.value = data.noteRange.note;
+        dayMessage.textContent = "Saved.";
+      }
+      renderCalendar();
+    }
     if (data.type === "note_range_deleted") {
       state.noteRanges = state.noteRanges.filter((range) => range.id !== data.id);
       if (state.selectedNoteRangeId === data.id) {
@@ -1120,7 +1191,13 @@ saveDayBtn.addEventListener("click", () => {
     dayMessage.textContent = "Saving.";
     return;
   }
-  dayMessage.textContent = "Editing existing notes is not supported yet.";
+  const selectedRange = state.noteRanges.find((range) => range.id === state.selectedNoteRangeId);
+  if (!selectedRange) {
+    dayMessage.textContent = "No note selected.";
+    return;
+  }
+  sendNoteRangeUpdate(selectedRange.id, note, selectedRange.version);
+  dayMessage.textContent = "Saving.";
 });
 
 clearDayBtn.addEventListener("click", () => {
