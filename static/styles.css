@@ -273,7 +273,8 @@ label {
 .day-cell,
 .day-card {
   --day-radius: 8px;
-  --note-gap-fill: 2px;
+  --note-gap-fill-x: 1.25px;
+  --note-gap-fill-y: 1.5px;
   position: relative;
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: var(--day-radius);
@@ -297,22 +298,22 @@ label {
 
 .day-cell.note-connect-left,
 .day-card.note-connect-left {
-  margin-left: calc(-1 * var(--note-gap-fill));
+  margin-left: calc(-1 * var(--note-gap-fill-x));
 }
 
 .day-cell.note-connect-right,
 .day-card.note-connect-right {
-  margin-right: calc(-1 * var(--note-gap-fill));
+  margin-right: calc(-1 * var(--note-gap-fill-x));
 }
 
 .day-cell.note-connect-up,
 .day-card.note-connect-up {
-  margin-top: calc(-1 * var(--note-gap-fill));
+  margin-top: calc(-1 * var(--note-gap-fill-y));
 }
 
 .day-cell.note-connect-down,
 .day-card.note-connect-down {
-  margin-bottom: calc(-1 * var(--note-gap-fill));
+  margin-bottom: calc(-1 * var(--note-gap-fill-y));
 }
 
 .day-cell.note-round-top-left,
@@ -387,7 +388,7 @@ label {
 
 .note-row-label-compact {
   left: 5px;
-  bottom: 3px;
+  bottom: 6px;
   width: calc((100% * var(--note-span)) + (var(--calendar-gap) * (var(--note-span) - 1)) - 10px);
   font-size: 0.52rem;
   line-height: 1;
