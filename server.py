@@ -65,7 +65,8 @@ class Category:
 @dataclass(frozen=True)
 class DayEntry:
     date: str
-    category_id: int
+    category_id: Optional[int]
+    label_id: Optional[int]
     version: int
 
 
@@ -107,6 +108,7 @@ class ErrorMessage:
 class SnapshotMessage:
     type: str
     categories: List[Category]
+    dayLabels: List[Category]
     days: List[DayEntry]
     noteRanges: List[NoteRange]
     palette: List[str]
@@ -118,6 +120,26 @@ class SnapshotMessage:
 class UserListMessage:
     type: str
     users: List[ManagedUser]
+
+
+
+
+@dataclass(frozen=True)
+class DayLabelCreatedMessage:
+    type: str
+    dayLabel: Category
+
+
+@dataclass(frozen=True)
+class DayLabelUpdatedMessage:
+    type: str
+    dayLabel: Category
+
+
+@dataclass(frozen=True)
+class DayLabelDeletedMessage:
+    type: str
+    id: int
 
 
 @dataclass(frozen=True)
@@ -265,6 +287,7 @@ class DeleteCategoryMessage:
 class SetDayMessage:
     date: str
     category_id: Optional[int]
+    label_id: Optional[int]
     expected_version: Optional[int]
 
     @staticmethod
@@ -282,6 +305,16 @@ class SetDayMessage:
                 category_id = int(category_value)
             except (TypeError, ValueError):
                 return None, "invalid_category"
+        label_value = payload.get("labelId")
+        if label_value in (None, "", 0):
+            label_id = None
+        else:
+            if not isinstance(label_value, (int, str)):
+                return None, "invalid_day_label"
+            try:
+                label_id = int(label_value)
+            except (TypeError, ValueError):
+                return None, "invalid_day_label"
         expected_value = payload.get("expectedVersion")
         expected_version = None
         if expected_value is not None:
@@ -291,11 +324,12 @@ class SetDayMessage:
                 expected_version = int(expected_value)
             except (TypeError, ValueError):
                 return None, "invalid_version"
-        if category_id is None and expected_version is None:
-            return None, "invalid_version"
+        if category_id is None and label_id is None and expected_version is None:
+            return None, "invalid_day"
         return SetDayMessage(
             date=date,
             category_id=category_id,
+            label_id=label_id,
             expected_version=expected_version,
         ), ""
 
@@ -499,6 +533,40 @@ async def ensure_column(db: aiosqlite.Connection, table: str, column: str) -> bo
         rows = await cursor.fetchall()
     return any(row[1] == column for row in rows)
 
+async def day_column_not_null(db: aiosqlite.Connection, column: str) -> bool:
+    async with db.execute("PRAGMA table_info(days)") as cursor:
+        rows = await cursor.fetchall()
+    for row in rows:
+        if row[1] == column:
+            return bool(row[3])
+    return False
+
+
+async def rebuild_days_table(db: aiosqlite.Connection) -> None:
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS days_new (
+            date TEXT PRIMARY KEY,
+            category_id INTEGER,
+            label_id INTEGER,
+            version INTEGER NOT NULL,
+            FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT,
+            FOREIGN KEY (label_id) REFERENCES day_labels(id) ON DELETE RESTRICT
+        )
+        """
+    )
+    has_label_id = await ensure_column(db, "days", "label_id")
+    if has_label_id:
+        await db.execute(
+            "INSERT INTO days_new (date, category_id, label_id, version) SELECT date, category_id, label_id, version FROM days"
+        )
+    else:
+        await db.execute(
+            "INSERT INTO days_new (date, category_id, label_id, version) SELECT date, category_id, NULL, version FROM days"
+        )
+    await db.execute("DROP TABLE days")
+    await db.execute("ALTER TABLE days_new RENAME TO days")
+
 
 async def init_db(db: aiosqlite.Connection) -> None:
     await db.executescript(
@@ -526,11 +594,21 @@ async def init_db(db: aiosqlite.Connection) -> None:
             version INTEGER NOT NULL DEFAULT 1
         );
 
+        CREATE TABLE IF NOT EXISTS day_labels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            color TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 1
+        );
+
         CREATE TABLE IF NOT EXISTS days (
             date TEXT PRIMARY KEY,
-            category_id INTEGER NOT NULL,
+            category_id INTEGER,
+            label_id INTEGER,
             version INTEGER NOT NULL,
-            FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
+            FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT,
+            FOREIGN KEY (label_id) REFERENCES day_labels(id) ON DELETE RESTRICT
         );
 
         CREATE TABLE IF NOT EXISTS note_ranges (
@@ -568,6 +646,17 @@ async def init_db(db: aiosqlite.Connection) -> None:
         await db.execute(
             "ALTER TABLE categories ADD COLUMN version INTEGER NOT NULL DEFAULT 1"
         )
+    if not await ensure_column(db, "day_labels", "version"):
+        await db.execute(
+            "ALTER TABLE day_labels ADD COLUMN version INTEGER NOT NULL DEFAULT 1"
+        )
+    should_rebuild_days = False
+    if not await ensure_column(db, "days", "label_id"):
+        should_rebuild_days = True
+    if await day_column_not_null(db, "category_id"):
+        should_rebuild_days = True
+    if should_rebuild_days:
+        await rebuild_days_table(db)
     if await ensure_column(db, "days", "note"):
         await db.execute(
             """
@@ -577,21 +666,7 @@ async def init_db(db: aiosqlite.Connection) -> None:
             WHERE note IS NOT NULL AND TRIM(note) != ''
             """
         )
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS days_new (
-                date TEXT PRIMARY KEY,
-                category_id INTEGER NOT NULL,
-                version INTEGER NOT NULL,
-                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
-            )
-            """
-        )
-        await db.execute(
-            "INSERT INTO days_new (date, category_id, version) SELECT date, category_id, version FROM days"
-        )
-        await db.execute("DROP TABLE days")
-        await db.execute("ALTER TABLE days_new RENAME TO days")
+        await rebuild_days_table(db)
     await db.commit()
 
 
@@ -704,8 +779,11 @@ def parse_message(payload: Dict[str, Any]) -> tuple[str, Any, str]:
     parser_map = {
         "auth": AuthMessage.parse,
         "create_category": CreateCategoryMessage.parse,
+        "create_day_label": CreateCategoryMessage.parse,
         "update_category": UpdateCategoryMessage.parse,
+        "update_day_label": UpdateCategoryMessage.parse,
         "delete_category": DeleteCategoryMessage.parse,
+        "delete_day_label": DeleteCategoryMessage.parse,
         "set_day": SetDayMessage.parse,
         "create_note_range": CreateNoteRangeMessage.parse,
         "update_note_range": UpdateNoteRangeMessage.parse,
@@ -778,6 +856,15 @@ class AppState:
         if dead:
             await self.unregister_dead(dead)
 
+    async def fetch_day_labels(self) -> List[Category]:
+        labels: List[Category] = []
+        async with self.db.execute(
+            "SELECT id, name, color, version FROM day_labels ORDER BY id"
+        ) as cursor:
+            async for row in cursor:
+                labels.append(Category(int(row[0]), str(row[1]), str(row[2]), int(row[3])))
+        return labels
+
     async def fetch_categories(self, user: Optional[AuthenticatedUser] = None) -> List[Category]:
         query = "SELECT id, name, color, version FROM categories"
         params: tuple[Any, ...] = ()
@@ -796,7 +883,7 @@ class AppState:
         return categories
 
     async def fetch_days(self, user: Optional[AuthenticatedUser] = None) -> List[DayEntry]:
-        query = "SELECT date, category_id, version FROM days"
+        query = "SELECT date, category_id, label_id, version FROM days"
         params: tuple[Any, ...] = ()
         if user and not user.is_admin:
             allowed = sorted(user.category_ids)
@@ -809,7 +896,7 @@ class AppState:
         days: List[DayEntry] = []
         async with self.db.execute(query, params) as cursor:
             async for row in cursor:
-                days.append(DayEntry(str(row[0]), int(row[1]), int(row[2])))
+                days.append(DayEntry(str(row[0]), int(row[1]) if row[1] is not None else None, int(row[2]) if row[2] is not None else None, int(row[3])))
         return days
 
     async def fetch_note_ranges(self, user: Optional[AuthenticatedUser] = None) -> List[NoteRange]:
@@ -857,11 +944,13 @@ class AppState:
     async def build_snapshot(self, user: AuthenticatedUser) -> SnapshotMessage:
         fresh_user = await get_user_by_id(self.db, user.id)
         categories = await self.fetch_categories(fresh_user)
+        day_labels = await self.fetch_day_labels()
         days = await self.fetch_days(fresh_user)
         note_ranges = await self.fetch_note_ranges(fresh_user)
         return SnapshotMessage(
             type="snapshot",
             categories=categories,
+            dayLabels=day_labels,
             days=days,
             noteRanges=note_ranges,
             palette=COLOR_PALETTE,
@@ -887,6 +976,60 @@ class AppState:
             session.user.id for session in await self._snapshot_sessions() if not session.user.is_admin
         }
         await self.refresh_sessions_for_user_ids(readonly_user_ids)
+
+    async def create_day_label(self, name: str, color: str) -> Category:
+        await self.db.execute("BEGIN")
+        try:
+            await self.db.execute(
+                "INSERT INTO day_labels (name, color, created_at, version) VALUES (?, ?, ?, 1)",
+                (name, color, now_iso()),
+            )
+            async with self.db.execute("SELECT last_insert_rowid()") as cursor:
+                row = await cursor.fetchone()
+            if row is None:
+                raise RuntimeError("Failed to fetch day label id")
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+        return Category(int(row[0]), name, color, 1)
+
+    async def update_day_label(
+        self, label_id: int, name: str, color: str, expected_version: int
+    ) -> Category:
+        await self.db.execute("BEGIN")
+        try:
+            cursor = await self.db.execute(
+                """
+                UPDATE day_labels
+                SET name = ?, color = ?, version = version + 1
+                WHERE id = ? AND version = ?
+                """,
+                (name, color, label_id, expected_version),
+            )
+            if cursor.rowcount != 1:
+                await self.db.rollback()
+                raise ValueError("version_conflict")
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+        return Category(label_id, name, color, expected_version + 1)
+
+    async def delete_day_label(self, label_id: int, expected_version: int) -> None:
+        await self.db.execute("BEGIN")
+        try:
+            cursor = await self.db.execute(
+                "DELETE FROM day_labels WHERE id = ? AND version = ?",
+                (label_id, expected_version),
+            )
+            if cursor.rowcount != 1:
+                await self.db.rollback()
+                raise ValueError("version_conflict")
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
 
     async def create_category(self, name: str, color: str) -> Category:
         await self.db.execute("BEGIN")
@@ -945,7 +1088,8 @@ class AppState:
     async def upsert_day(
         self,
         date: str,
-        category_id: int,
+        category_id: Optional[int],
+        label_id: Optional[int],
         expected_version: Optional[int],
     ) -> DayEntry:
         await self.db.execute("BEGIN")
@@ -953,24 +1097,24 @@ class AppState:
             if expected_version in (None, 0):
                 cursor = await self.db.execute(
                     """
-                    INSERT INTO days (date, category_id, version)
-                    VALUES (?, ?, 1)
+                    INSERT INTO days (date, category_id, label_id, version)
+                    VALUES (?, ?, ?, 1)
                     ON CONFLICT(date) DO NOTHING
                     """,
-                    (date, category_id),
+                    (date, category_id, label_id),
                 )
                 if cursor.rowcount != 1:
                     await self.db.rollback()
                     raise ValueError("version_conflict")
                 await self.db.commit()
-                return DayEntry(date, category_id, 1)
+                return DayEntry(date, category_id, label_id, 1)
             cursor = await self.db.execute(
                 """
                 UPDATE days
-                SET category_id = ?, version = version + 1
+                SET category_id = ?, label_id = ?, version = version + 1
                 WHERE date = ? AND version = ?
                 """,
-                (category_id, date, expected_version),
+                (category_id, label_id, date, expected_version),
             )
             if cursor.rowcount != 1:
                 await self.db.rollback()
@@ -981,7 +1125,7 @@ class AppState:
             raise
         if expected_version is None:
             raise RuntimeError("Missing expected version for update")
-        return DayEntry(date, category_id, expected_version + 1)
+        return DayEntry(date, category_id, label_id, expected_version + 1)
 
     async def delete_day(self, date: str, expected_version: Optional[int]) -> None:
         if expected_version is None:
@@ -1483,6 +1627,12 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                     if not active_user.is_admin:
                         await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
                         continue
+                    if msg_type == "create_day_label":
+                        day_label = await state.create_day_label(name, color)
+                        await state.broadcast_filtered(
+                            lambda user: DayLabelCreatedMessage(type="day_label_created", dayLabel=day_label)
+                        )
+                        continue
                     category = await state.create_category(name, color)
                     await state.broadcast_filtered(
                         lambda user: CategoryCreatedMessage(type="category_created", category=category)
@@ -1500,10 +1650,18 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                         await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
                         continue
                     try:
-                        category = await state.update_category(category_id, name, color, expected_version)
+                        if msg_type == "update_day_label":
+                            day_label = await state.update_day_label(category_id, name, color, expected_version)
+                        else:
+                            category = await state.update_category(category_id, name, color, expected_version)
                     except ValueError:
                         await ws.send_str(
                             encode_message(ErrorMessage(type="error", message="version_conflict"))
+                        )
+                        continue
+                    if msg_type == "update_day_label":
+                        await state.broadcast_filtered(
+                            lambda user: DayLabelUpdatedMessage(type="day_label_updated", dayLabel=day_label)
                         )
                         continue
                     await state.broadcast_filtered(
@@ -1517,7 +1675,10 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                         await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
                         continue
                     try:
-                        await state.delete_category(category_id, expected_version)
+                        if msg_type == "delete_day_label":
+                            await state.delete_day_label(category_id, expected_version)
+                        else:
+                            await state.delete_category(category_id, expected_version)
                     except aiosqlite.IntegrityError:
                         await ws.send_str(
                             encode_message(ErrorMessage(type="error", message="category_in_use"))
@@ -1526,6 +1687,11 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                     except ValueError:
                         await ws.send_str(
                             encode_message(ErrorMessage(type="error", message="version_conflict"))
+                        )
+                        continue
+                    if msg_type == "delete_day_label":
+                        await state.broadcast_filtered(
+                            lambda user: DayLabelDeletedMessage(type="day_label_deleted", id=category_id)
                         )
                         continue
                     await state.broadcast_filtered(
@@ -1537,13 +1703,14 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                 case SetDayMessage(
                     date=date,
                     category_id=category_id,
+                    label_id=label_id,
                     expected_version=expected_version,
                 ):
                     if not active_user.is_admin:
                         await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
                         continue
                     try:
-                        if category_id is None:
+                        if category_id is None and label_id is None:
                             await state.delete_day(date, expected_version)
                             await state.broadcast_filtered(
                                 lambda user: DayDeletedMessage(type="day_deleted", date=date)
@@ -1552,7 +1719,7 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                             )
                             await state.refresh_readonly_sessions()
                         else:
-                            entry = await state.upsert_day(date, category_id, expected_version)
+                            entry = await state.upsert_day(date, category_id, label_id, expected_version)
                             await state.broadcast_filtered(
                                 lambda user: DayUpdatedMessage(type="day_updated", day=entry)
                                 if user.is_admin

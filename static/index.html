@@ -27,7 +27,7 @@
           <div class="status" id="connectionStatus">Offline</div>
         </div>
         <div class="toolbar-right">
-          <button class="ghost" id="toggleCategories">Categories</button>
+          <button class="ghost" id="toggleCategories">Day labels</button>
           <button class="ghost" id="toggleConfig">Config</button>
         </div>
       </header>
@@ -66,7 +66,7 @@
       <div class="modal-backdrop" data-close-modal="categoriesModal"></div>
       <div class="modal-card">
         <div class="modal-header">
-          <h2>Categories</h2>
+          <h2>Day labels</h2>
           <button class="ghost icon-btn" data-close-modal="categoriesModal">✕</button>
         </div>
         <div class="sticky-panel category-controls">
@@ -76,7 +76,25 @@
           </label>
           <button id="addCategory">Add category</button>
         </div>
-        <div id="categoryList" class="category-list"></div>
+        <div class="stack compact label-section">
+          <div class="label-section-header">
+            <div>
+              <h3>Corner labels</h3>
+              <p class="helper">Create folded-corner day markers like weekend, holiday, or non-working day.</p>
+            </div>
+            <button id="addDayLabel" type="button">Add label</button>
+          </div>
+          <div id="dayLabelList" class="category-list"></div>
+        </div>
+        <div class="stack compact label-section">
+          <div class="label-section-header">
+            <div>
+              <h3>Main categories</h3>
+              <p class="helper">These still control the full-day color fill.</p>
+            </div>
+          </div>
+          <div id="categoryList" class="category-list"></div>
+        </div>
       </div>
     </div>
 
@@ -143,10 +161,11 @@
       <div class="modal-backdrop" data-close-modal="categoryModal"></div>
       <div class="modal-card narrow">
         <div class="modal-header">
-          <h2>New category</h2>
+          <h2 id="categoryModalTitle">New category</h2>
           <button class="ghost icon-btn" data-close-modal="categoryModal">✕</button>
         </div>
         <form id="categoryForm" class="stack compact">
+          <input type="hidden" id="categoryKindInput" value="category" />
           <label>
             Name
             <input type="text" id="categoryNameInput" maxlength="24" required />
@@ -166,17 +185,21 @@
       <div class="modal-backdrop" data-close-modal="dayModal"></div>
       <div class="modal-card narrow">
         <div class="modal-header">
-          <h2 id="dayTitle">Note</h2>
+          <h2 id="dayTitle">Day details</h2>
           <button class="ghost icon-btn" data-close-modal="dayModal">✕</button>
         </div>
         <div class="stack compact">
+          <label>
+            Corner label
+            <select id="dayLabelSelect"></select>
+          </label>
           <label>
             Note
             <input type="text" id="dayNote" maxlength="120" />
           </label>
           <div class="button-row">
-            <button id="saveDay" type="button">Save</button>
-            <button class="ghost" id="clearDay" type="button">Clear</button>
+            <button id="saveDay" type="button">Save note</button>
+            <button class="ghost" id="clearDay" type="button">Clear note</button>
           </div>
           <p class="helper" id="dayMessage"></p>
         </div>
