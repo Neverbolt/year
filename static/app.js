@@ -2,6 +2,7 @@ const state = {
   token: null,
   ws: null,
   categories: [],
+  dayLabels: [],
   days: new Map(),
   noteRanges: [],
   view: "year",
@@ -31,8 +32,11 @@ const appShell = document.getElementById("appShell");
 const categoryList = document.getElementById("categoryList");
 const categoryFilter = document.getElementById("categoryFilter");
 const addCategoryBtn = document.getElementById("addCategory");
+const addDayLabelBtn = document.getElementById("addDayLabel");
 const calendarEl = document.getElementById("calendar");
 const dayTitle = document.getElementById("dayTitle");
+const cornerLabelSelect = document.getElementById("cornerLabelSelect");
+const circleLabelSelect = document.getElementById("circleLabelSelect");
 const dayNote = document.getElementById("dayNote");
 const dayMessage = document.getElementById("dayMessage");
 const saveDayBtn = document.getElementById("saveDay");
@@ -46,11 +50,16 @@ const toggleConfig = document.getElementById("toggleConfig");
 const toggleCategories = document.getElementById("toggleCategories");
 const logoutButton = document.getElementById("logoutButton");
 const categoryForm = document.getElementById("categoryForm");
+const categoryModalTitle = document.getElementById("categoryModalTitle");
+const categoryKindInput = document.getElementById("categoryKindInput");
+const dayLabelStyleField = document.getElementById("dayLabelStyleField");
+const dayLabelStyleInput = document.getElementById("dayLabelStyleInput");
 const categoryNameInput = document.getElementById("categoryNameInput");
 const categoryColorInput = document.getElementById("categoryColorInput");
 const categoryMessage = document.getElementById("categoryMessage");
 const suggestedColors = document.getElementById("suggestedColors");
 const brushPalette = document.getElementById("brushPalette");
+const dayLabelList = document.getElementById("dayLabelList");
 const paintToolbarTitle = document.getElementById("paintToolbarTitle");
 const paintToolbarHint = document.getElementById("paintToolbarHint");
 const userAdminSection = document.getElementById("userAdminSection");
@@ -95,8 +104,9 @@ function syncAccessUI() {
   const admin = isAdmin();
   userAdminSection.classList.toggle("hidden", !admin);
   addCategoryBtn.classList.toggle("hidden", !admin);
+  addDayLabelBtn.classList.toggle("hidden", !admin);
   document.body.classList.toggle("read-only-user", !admin);
-  setButtonsDisabled(!admin, [addCategoryBtn, saveDayBtn, clearDayBtn]);
+  setButtonsDisabled(!admin, [addCategoryBtn, addDayLabelBtn, saveDayBtn, clearDayBtn, cornerLabelSelect, circleLabelSelect]);
   paintToolbarTitle.textContent = admin ? "Quick assign" : "Filter";
   paintToolbarHint.textContent = admin
     ? "Pick a category or Notes · drag like text selection · release to save the final range."
@@ -173,6 +183,18 @@ function getCategoryColor(categoryId) {
   if (categoryId === "") return "#0f172a";
   const category = state.categories.find((cat) => String(cat.id) === String(categoryId));
   return category?.color || "#1f2937";
+}
+
+function getDayLabel(labelId) {
+  return state.dayLabels.find((label) => String(label.id) === String(labelId)) || null;
+}
+
+function getDayLabelColor(labelId) {
+  return getDayLabel(labelId)?.color || "#94a3b8";
+}
+
+function getDayLabelStyle(labelId) {
+  return getDayLabel(labelId)?.marker_style || "corner";
 }
 
 function getEntry(dateIso) {
@@ -280,6 +302,117 @@ function updateCategorySelects() {
   }
 }
 
+function fillDayLabelSelect(selectElement, markerStyle) {
+  if (!selectElement) return;
+  selectElement.innerHTML = "";
+  const noneOption = document.createElement("option");
+  noneOption.value = "";
+  noneOption.textContent = `No ${markerStyle} label`;
+  selectElement.appendChild(noneOption);
+  state.dayLabels
+    .filter((label) => (label.marker_style || "corner") === markerStyle)
+    .forEach((label) => {
+    const option = document.createElement("option");
+    option.value = String(label.id);
+    const markerPrefix = markerStyle === "circle" ? "◉ " : "◥ ";
+    option.textContent = `${markerPrefix}${label.name}`;
+    selectElement.appendChild(option);
+  });
+}
+
+function renderDayLabelSelects() {
+  fillDayLabelSelect(cornerLabelSelect, "corner");
+  fillDayLabelSelect(circleLabelSelect, "circle");
+}
+
+function renderDayLabelValueSummary(entry) {
+  const parts = [];
+  const cornerLabel = entry?.corner_label_id ? getDayLabel(entry.corner_label_id) : null;
+  const circleLabel = entry?.circle_label_id ? getDayLabel(entry.circle_label_id) : null;
+  if (cornerLabel) parts.push(`Corner: ${cornerLabel.name}`);
+  if (circleLabel) parts.push(`Circle: ${circleLabel.name}`);
+  return parts;
+}
+
+function renderDayLabelSelect() {
+  if (!cornerLabelSelect || !circleLabelSelect) return;
+  renderDayLabelSelects();
+}
+
+function renderDayLabels() {
+  dayLabelList.innerHTML = "";
+  const labelCounts = new Map();
+  state.days.forEach((entry) => {
+    if (entry.corner_label_id !== null && entry.corner_label_id !== undefined) {
+      labelCounts.set(entry.corner_label_id, (labelCounts.get(entry.corner_label_id) || 0) + 1);
+    }
+    if (entry.circle_label_id !== null && entry.circle_label_id !== undefined) {
+      labelCounts.set(entry.circle_label_id, (labelCounts.get(entry.circle_label_id) || 0) + 1);
+    }
+  });
+  state.dayLabels.forEach((labelData) => {
+    const item = document.createElement("div");
+    item.className = "category-item";
+
+    const swatch = document.createElement("div");
+    swatch.className = "category-swatch";
+    swatch.style.background = labelData.color;
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.value = labelData.name;
+    nameInput.disabled = !isAdmin();
+
+    const count = document.createElement("div");
+    count.className = "helper category-count";
+    count.textContent = `${labelCounts.get(labelData.id) || 0} days`;
+
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = labelData.color;
+    colorInput.disabled = !isAdmin();
+
+    const styleSelect = document.createElement("select");
+    styleSelect.disabled = !isAdmin();
+    styleSelect.innerHTML = `
+      <option value="corner">Corner fold</option>
+      <option value="circle">Circle number</option>
+    `;
+    styleSelect.value = labelData.marker_style || "corner";
+
+    const saveButton = document.createElement("button");
+    saveButton.type = "button";
+    saveButton.textContent = "Save";
+    saveButton.disabled = !isAdmin();
+    saveButton.addEventListener("click", () => {
+      sendMessage({
+        type: "update_day_label",
+        id: labelData.id,
+        name: nameInput.value.trim(),
+        color: colorInput.value,
+        markerStyle: styleSelect.value,
+        expectedVersion: labelData.version,
+      });
+    });
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "ghost";
+    deleteButton.textContent = "✕";
+    deleteButton.disabled = !isAdmin();
+    deleteButton.addEventListener("click", () => {
+      sendMessage({
+        type: "delete_day_label",
+        id: labelData.id,
+        expectedVersion: labelData.version,
+      });
+    });
+
+    item.append(swatch, nameInput, count, colorInput, styleSelect, saveButton, deleteButton);
+    dayLabelList.appendChild(item);
+  });
+}
+
 function renderBrushPalette() {
   brushPalette.innerHTML = "";
   const options = isAdmin()
@@ -321,7 +454,7 @@ function renderSuggestedColors() {
   suggestedColors.innerHTML = "";
   const colors = suggestColors(
     state.palette,
-    state.categories.map((cat) => cat.color)
+    [...state.categories, ...state.dayLabels].map((cat) => cat.color)
   );
   colors.forEach((color) => {
     const button = document.createElement("button");
@@ -545,16 +678,23 @@ function setSelectedDate(date) {
   state.pendingNoteRange = null;
   dayMessage.textContent = "";
   const iso = formatDate(date);
+  const entry = getEntry(iso);
   const noteRange = getNoteRangeForDate(iso);
   dayTitle.textContent = date.toDateString();
+  renderDayLabelSelects();
+  cornerLabelSelect.value = entry?.corner_label_id ? String(entry.corner_label_id) : "";
+  circleLabelSelect.value = entry?.circle_label_id ? String(entry.circle_label_id) : "";
+  cornerLabelSelect.disabled = !isAdmin();
+  circleLabelSelect.disabled = !isAdmin();
   dayNote.value = noteRange?.note ?? "";
   dayNote.disabled = !isAdmin();
   saveDayBtn.disabled = !isAdmin() || !noteRange;
   clearDayBtn.disabled = !isAdmin() || !noteRange;
   state.selectedNoteRangeId = noteRange?.id ?? null;
-  dayMessage.textContent = noteRange
-    ? `${noteRange.start_date} → ${noteRange.end_date}`
-    : "No note for this date.";
+  const details = renderDayLabelValueSummary(entry);
+  if (noteRange) details.push(`Note range: ${noteRange.start_date} → ${noteRange.end_date}`);
+  if (!details.length) details.push("No extra label or note for this date.");
+  dayMessage.textContent = details.join(" · ");
   openModal("dayModal");
   renderCalendar();
 }
@@ -569,6 +709,15 @@ function buildDayCell(dateObj, compact = true) {
   element.dataset.date = iso;
   const color = entry ? getCategoryColor(entry.category_id) : "#1e293b";
   element.style.background = color;
+  const cornerLabelId = entry?.corner_label_id ?? null;
+  const circleLabelId = entry?.circle_label_id ?? null;
+  if (cornerLabelId) {
+    element.style.setProperty("--corner-label-color", getDayLabelColor(cornerLabelId));
+    const corner = document.createElement("span");
+    corner.className = "corner-label";
+    corner.setAttribute("aria-hidden", "true");
+    element.appendChild(corner);
+  }
   if (entry && shouldDim(entry.category_id)) {
     element.classList.add("dim");
   } else if (!entry && state.filterCategoryId !== "all") {
@@ -596,6 +745,13 @@ function buildDayCell(dateObj, compact = true) {
   title.textContent = compact
     ? String(dateObj.getDate())
     : dateObj.toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
+  if (circleLabelId) {
+    title.classList.add("day-number-circle");
+    title.classList.add(compact ? "day-number-circle-compact" : "day-number-circle-card");
+    title.style.setProperty("--day-number-circle-color", getDayLabelColor(circleLabelId));
+  }
+  const titleParts = renderDayLabelValueSummary(entry);
+  if (titleParts.length) element.title = titleParts.join(" · ");
   element.appendChild(title);
 
   if (noteRange?.note) {
@@ -749,7 +905,8 @@ function suggestColors(palette, existing, limit = 5) {
 
 function applyLocalDayState(date, categoryId) {
   const existing = getEntry(date);
-  if (categoryId === null || categoryId === "") {
+  const normalizedCategoryId = categoryId === "" ? null : categoryId;
+  if (normalizedCategoryId === null && !existing?.corner_label_id && !existing?.circle_label_id) {
     if (existing) {
       state.days.delete(date);
     }
@@ -758,7 +915,9 @@ function applyLocalDayState(date, categoryId) {
   const nextVersion = existing ? existing.version + 1 : 1;
   state.days.set(date, {
     date,
-    category_id: Number(categoryId),
+    category_id: normalizedCategoryId === null ? null : Number(normalizedCategoryId),
+    corner_label_id: existing?.corner_label_id ?? null,
+    circle_label_id: existing?.circle_label_id ?? null,
     version: nextVersion,
   });
 }
@@ -766,16 +925,19 @@ function applyLocalDayState(date, categoryId) {
 function sendDayUpdate(date, categoryId) {
   if (!isAdmin()) return;
   const entry = getEntry(date);
-  if ((categoryId === null || categoryId === "") && !entry) {
+  const normalizedCategoryId = categoryId === "" ? null : categoryId;
+  if (normalizedCategoryId === null && !entry?.corner_label_id && !entry?.circle_label_id && !entry) {
     return;
   }
   sendMessage({
     type: "set_day",
     date,
-    categoryId,
+    categoryId: normalizedCategoryId,
+    cornerLabelId: entry?.corner_label_id ?? null,
+    circleLabelId: entry?.circle_label_id ?? null,
     expectedVersion: entry ? entry.version : null,
   });
-  applyLocalDayState(date, categoryId);
+  applyLocalDayState(date, normalizedCategoryId);
 }
 
 function sendNoteRangeCreate(startDate, endDate, note) {
@@ -865,7 +1027,7 @@ function handleDayClick(event, iso) {
       return;
     }
   }
-  if (getNoteRangeForDate(iso)) {
+  if (state.brushCategoryId === null) {
     setSelectedDate(parseDate(iso));
   }
 }
@@ -931,6 +1093,7 @@ async function syncAdminData() {
 
 async function handleSnapshot(data) {
   state.categories = data.categories || [];
+  state.dayLabels = data.dayLabels || [];
   state.days = new Map((data.days || []).map((entry) => [entry.date, entry]));
   state.noteRanges = data.noteRanges || [];
   state.palette = data.palette || [];
@@ -943,6 +1106,8 @@ async function handleSnapshot(data) {
     state.brushCategoryId = null;
   }
   updateCategorySelects();
+  renderDayLabelSelect();
+  renderDayLabels();
   renderCategories();
   renderSuggestedColors();
   renderCalendar();
@@ -991,6 +1156,25 @@ function connectWebSocket() {
   state.ws.addEventListener("message", async (event) => {
     const data = JSON.parse(event.data);
     if (data.type === "snapshot") await handleSnapshot(data);
+    if (data.type === "day_label_created") {
+      state.dayLabels.push(data.dayLabel);
+      renderDayLabelSelect();
+      renderDayLabels();
+      renderCalendar();
+    }
+    if (data.type === "day_label_updated") {
+      const index = state.dayLabels.findIndex((label) => label.id === data.dayLabel.id);
+      if (index !== -1) state.dayLabels[index] = data.dayLabel;
+      renderDayLabelSelect();
+      renderDayLabels();
+      renderCalendar();
+    }
+    if (data.type === "day_label_deleted") {
+      state.dayLabels = state.dayLabels.filter((label) => label.id !== data.id);
+      renderDayLabelSelect();
+      renderDayLabels();
+      renderCalendar();
+    }
     if (data.type === "category_created") {
       state.categories.push(data.category);
       updateCategorySelects();
@@ -1018,12 +1202,23 @@ function connectWebSocket() {
     }
     if (data.type === "day_updated") {
       state.days.set(data.day.date, data.day);
+      renderDayLabels();
       renderCategories();
+      if (state.selectedDate && formatDate(state.selectedDate) === data.day.date) {
+        cornerLabelSelect.value = data.day.corner_label_id ? String(data.day.corner_label_id) : "";
+        circleLabelSelect.value = data.day.circle_label_id ? String(data.day.circle_label_id) : "";
+        dayMessage.textContent = "Saved.";
+      }
       renderCalendar();
     }
     if (data.type === "day_deleted") {
       state.days.delete(data.date);
+      renderDayLabels();
       renderCategories();
+      if (state.selectedDate && formatDate(state.selectedDate) === data.date) {
+        cornerLabelSelect.value = "";
+        circleLabelSelect.value = "";
+      }
       renderCalendar();
     }
     if (data.type === "note_range_created") {
@@ -1133,6 +1328,7 @@ async function logout() {
     state.userVersion = null;
     state.managedUsers = [];
     state.categories = [];
+    state.dayLabels = [];
     state.days = new Map();
     state.noteRanges = [];
     state.selectedNoteRangeId = null;
@@ -1160,24 +1356,60 @@ loginForm.addEventListener("submit", async (event) => {
   }
 });
 
-addCategoryBtn.addEventListener("click", () => {
+function openCategoryEditor(kind) {
   categoryForm.reset();
   categoryMessage.textContent = "";
+  categoryKindInput.value = kind;
+  dayLabelStyleField.classList.toggle("hidden", kind !== "day_label");
+  dayLabelStyleInput.value = "corner";
+  categoryModalTitle.textContent = kind === "day_label" ? "New day label" : "New category";
   renderSuggestedColors();
   openModal("categoryModal");
   categoryNameInput.focus();
-});
+}
+
+addCategoryBtn.addEventListener("click", () => openCategoryEditor("category"));
+addDayLabelBtn.addEventListener("click", () => openCategoryEditor("day_label"));
 
 categoryForm.addEventListener("submit", (event) => {
   event.preventDefault();
   if (!isAdmin()) return;
   sendMessage({
-    type: "create_category",
+    type: categoryKindInput.value === "day_label" ? "create_day_label" : "create_category",
     name: categoryNameInput.value.trim(),
     color: categoryColorInput.value,
+    markerStyle: categoryKindInput.value === "day_label" ? dayLabelStyleInput.value : undefined,
   });
   closeModal("categoryModal");
 });
+
+function handleDayLabelChange(markerStyle) {
+  if (!isAdmin() || !state.selectedDate) return;
+  const iso = formatDate(state.selectedDate);
+  const entry = getEntry(iso);
+  const cornerLabelId = cornerLabelSelect.value ? Number(cornerLabelSelect.value) : null;
+  const circleLabelId = circleLabelSelect.value ? Number(circleLabelSelect.value) : null;
+  const currentCornerLabelId = entry?.corner_label_id ?? null;
+  const currentCircleLabelId = entry?.circle_label_id ?? null;
+  if (currentCornerLabelId === cornerLabelId && currentCircleLabelId === circleLabelId) {
+    return;
+  }
+  sendMessage({
+    type: "set_day",
+    date: iso,
+    categoryId: entry?.category_id ?? null,
+    cornerLabelId,
+    circleLabelId,
+    expectedVersion: entry?.version ?? null,
+  });
+  dayMessage.textContent =
+    markerStyle === "circle"
+      ? circleLabelId === null ? "Clearing circle label." : "Saving circle label."
+      : cornerLabelId === null ? "Clearing corner label." : "Saving corner label.";
+}
+
+cornerLabelSelect.addEventListener("change", () => handleDayLabelChange("corner"));
+circleLabelSelect.addEventListener("change", () => handleDayLabelChange("circle"));
 
 saveDayBtn.addEventListener("click", () => {
   if (!isAdmin()) return;

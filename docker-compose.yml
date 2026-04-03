@@ -1,0 +1,18 @@
+services:
+  year:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: year:local
+    ports:
+      - "8000:8000"
+    environment:
+      YEAR_DB_PATH: /data/year.db
+      YEAR_HOST: 0.0.0.0
+      YEAR_PORT: "8000"
+      # Set one of these before first start (examples):
+      # YEAR_APP_PASSWORD: change-me
+      # YEAR_APP_USERS_JSON: '[{"name":"admin","password":"change-me","role":"admin"}]'
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
