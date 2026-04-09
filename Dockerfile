@@ -11,11 +11,15 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server.py ./
-COPY static ./static
+# Copy static assets and source files separately
+COPY static/ ./static/
+COPY src/ ./src/
 
+# Ensure the data directory exists for the SQLite database
 RUN mkdir -p /data
 
 EXPOSE 8000
 
-CMD ["python", "server.py"]
+# Set Python path to find modules in src/ and start server from root
+ENV PYTHONPATH=/app/src
+CMD ["python", "src/server.py"]

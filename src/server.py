@@ -1422,9 +1422,12 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     return ws
 
 
+STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+
+
 async def index_handler(request: web.Request) -> web.StreamResponse:
     ensure_origin_allowed(request)
-    return web.FileResponse(path="static/index.html")
+    return web.FileResponse(path=os.path.join(STATIC_DIR, "index.html"))
 
 
 async def health_handler(request: web.Request) -> web.Response:
@@ -1450,7 +1453,7 @@ async def create_app() -> web.Application:
     app.router.add_post("/api/users", create_user_handler)
     app.router.add_put("/api/users/{user_id}", update_user_handler)
     app.router.add_get("/ws", ws_handler)
-    app.router.add_static("/static/", path="static", name="static")
+    app.router.add_static("/static/", path=STATIC_DIR, name="static")
 
     async def close_db(app: web.Application) -> None:
         await app["db"].close()
