@@ -7,12 +7,18 @@ import secrets
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import aiosqlite
 import jwt
 from aiohttp import WSMsgType, web
 from passlib.context import CryptContext
+from errors import AUTH_FAILED, AUTH_REQUIRED, INVALID_JSON, UNKNOWN_MESSAGE
+from ws_commands import (
+    AuthCommand,
+)
+from ws_handlers import WS_COMMAND_HANDLERS, send_ws_error
+from ws_parsing import parse_message
 
 DB_PATH = os.environ.get("YEAR_DB_PATH", "year.db")
 HOST = os.environ.get("YEAR_HOST", "0.0.0.0")
@@ -180,355 +186,6 @@ class DayUpdatedMessage:
 class DayDeletedMessage:
     type: str
     date: str
-
-
-@dataclass(frozen=True)
-class NoteRangeCreatedMessage:
-    type: str
-    noteRange: NoteRange
-
-
-@dataclass(frozen=True)
-class NoteRangeUpdatedMessage:
-    type: str
-    noteRange: NoteRange
-
-
-@dataclass(frozen=True)
-class NoteRangeDeletedMessage:
-    type: str
-    id: int
-
-
-@dataclass(frozen=True)
-class PasswordUpdatedMessage:
-    type: str
-    user: UserSnapshot
-
-
-@dataclass(frozen=True)
-class AuthMessage:
-    token: str
-
-    @staticmethod
-    def parse(payload: Dict[str, Any]) -> Tuple[Optional["AuthMessage"], str]:
-        token = payload.get("token")
-        if not isinstance(token, str):
-            return None, "invalid_token"
-        return AuthMessage(token=token), ""
-
-
-@dataclass(frozen=True)
-class CreateCategoryMessage:
-    name: str
-    color: str
-
-    @staticmethod
-    def parse(payload: Dict[str, Any]) -> Tuple[Optional["CreateCategoryMessage"], str]:
-        name = payload.get("name")
-        color = payload.get("color")
-        if not isinstance(name, str) or not isinstance(color, str):
-            return None, "invalid_category"
-        name = name.strip()
-        color = color.strip()
-        if not name or not color:
-            return None, "invalid_category"
-        return CreateCategoryMessage(name=name, color=color), ""
-
-
-@dataclass(frozen=True)
-class UpdateCategoryMessage:
-    id: int
-    name: str
-    color: str
-    expected_version: int
-
-    @staticmethod
-    def parse(payload: Dict[str, Any]) -> Tuple[Optional["UpdateCategoryMessage"], str]:
-        category_value = payload.get("id")
-        version_value = payload.get("expectedVersion")
-        if not isinstance(category_value, (int, str)) or not isinstance(
-            version_value, (int, str)
-        ):
-            return None, "invalid_category"
-        try:
-            category_id = int(category_value)
-            expected_version = int(version_value)
-        except (TypeError, ValueError):
-            return None, "invalid_category"
-        name = payload.get("name")
-        color = payload.get("color")
-        if not isinstance(name, str) or not isinstance(color, str):
-            return None, "invalid_category"
-        name = name.strip()
-        color = color.strip()
-        if not name or not color:
-            return None, "invalid_category"
-        return UpdateCategoryMessage(
-            id=category_id,
-            name=name,
-            color=color,
-            expected_version=expected_version,
-        ), ""
-
-
-@dataclass(frozen=True)
-class DeleteCategoryMessage:
-    id: int
-    expected_version: int
-
-    @staticmethod
-    def parse(payload: Dict[str, Any]) -> Tuple[Optional["DeleteCategoryMessage"], str]:
-        category_value = payload.get("id")
-        version_value = payload.get("expectedVersion")
-        if not isinstance(category_value, (int, str)) or not isinstance(
-            version_value, (int, str)
-        ):
-            return None, "invalid_category"
-        try:
-            category_id = int(category_value)
-            expected_version = int(version_value)
-        except (TypeError, ValueError):
-            return None, "invalid_category"
-        return DeleteCategoryMessage(id=category_id, expected_version=expected_version), ""
-
-
-@dataclass(frozen=True)
-class SetDayMessage:
-    date: str
-    category_id: Optional[int]
-    corner_label_id: Optional[int]
-    circle_label_id: Optional[int]
-    expected_version: Optional[int]
-
-    @staticmethod
-    def parse(payload: Dict[str, Any]) -> Tuple[Optional["SetDayMessage"], str]:
-        date = payload.get("date")
-        if not isinstance(date, str) or not date:
-            return None, "invalid_date"
-        category_value = payload.get("categoryId")
-        if category_value in (None, "", 0):
-            category_id = None
-        else:
-            if not isinstance(category_value, (int, str)):
-                return None, "invalid_category"
-            try:
-                category_id = int(category_value)
-            except (TypeError, ValueError):
-                return None, "invalid_category"
-        corner_label_value = payload.get("cornerLabelId")
-        if corner_label_value in (None, "", 0):
-            corner_label_id = None
-        else:
-            if not isinstance(corner_label_value, (int, str)):
-                return None, "invalid_day_label"
-            try:
-                corner_label_id = int(corner_label_value)
-            except (TypeError, ValueError):
-                return None, "invalid_day_label"
-        circle_label_value = payload.get("circleLabelId")
-        if circle_label_value in (None, "", 0):
-            circle_label_id = None
-        else:
-            if not isinstance(circle_label_value, (int, str)):
-                return None, "invalid_day_label"
-            try:
-                circle_label_id = int(circle_label_value)
-            except (TypeError, ValueError):
-                return None, "invalid_day_label"
-        if corner_label_value is None and circle_label_value is None:
-            legacy_label_value = payload.get("labelId")
-            if legacy_label_value not in (None, "", 0):
-                if not isinstance(legacy_label_value, (int, str)):
-                    return None, "invalid_day_label"
-                try:
-                    corner_label_id = int(legacy_label_value)
-                except (TypeError, ValueError):
-                    return None, "invalid_day_label"
-        expected_value = payload.get("expectedVersion")
-        expected_version = None
-        if expected_value is not None:
-            if not isinstance(expected_value, (int, str)):
-                return None, "invalid_version"
-            try:
-                expected_version = int(expected_value)
-            except (TypeError, ValueError):
-                return None, "invalid_version"
-        if category_id is None and corner_label_id is None and circle_label_id is None and expected_version is None:
-            return None, "invalid_day"
-        return SetDayMessage(
-            date=date,
-            category_id=category_id,
-            corner_label_id=corner_label_id,
-            circle_label_id=circle_label_id,
-            expected_version=expected_version,
-        ), ""
-
-
-VALID_MARKER_STYLES = {"corner", "circle"}
-
-
-@dataclass(frozen=True)
-class CreateDayLabelMessage:
-    name: str
-    color: str
-    marker_style: str
-
-    @staticmethod
-    def parse(payload: Dict[str, Any]) -> Tuple[Optional["CreateDayLabelMessage"], str]:
-        name = payload.get("name")
-        color = payload.get("color")
-        marker_style = payload.get("markerStyle", "corner")
-        if (
-            not isinstance(name, str)
-            or not isinstance(color, str)
-            or not isinstance(marker_style, str)
-        ):
-            return None, "invalid_day_label"
-        name = name.strip()
-        color = color.strip()
-        marker_style = marker_style.strip().lower()
-        if not name or not color or marker_style not in VALID_MARKER_STYLES:
-            return None, "invalid_day_label"
-        return CreateDayLabelMessage(name=name, color=color, marker_style=marker_style), ""
-
-
-@dataclass(frozen=True)
-class UpdateDayLabelMessage:
-    id: int
-    name: str
-    color: str
-    marker_style: str
-    expected_version: int
-
-    @staticmethod
-    def parse(payload: Dict[str, Any]) -> Tuple[Optional["UpdateDayLabelMessage"], str]:
-        label_value = payload.get("id")
-        version_value = payload.get("expectedVersion")
-        marker_style = payload.get("markerStyle", "corner")
-        if not isinstance(label_value, (int, str)) or not isinstance(version_value, (int, str)):
-            return None, "invalid_day_label"
-        try:
-            label_id = int(label_value)
-            expected_version = int(version_value)
-        except (TypeError, ValueError):
-            return None, "invalid_day_label"
-        name = payload.get("name")
-        color = payload.get("color")
-        if (
-            not isinstance(name, str)
-            or not isinstance(color, str)
-            or not isinstance(marker_style, str)
-        ):
-            return None, "invalid_day_label"
-        name = name.strip()
-        color = color.strip()
-        marker_style = marker_style.strip().lower()
-        if not name or not color or marker_style not in VALID_MARKER_STYLES:
-            return None, "invalid_day_label"
-        return UpdateDayLabelMessage(
-            id=label_id,
-            name=name,
-            color=color,
-            marker_style=marker_style,
-            expected_version=expected_version,
-        ), ""
-
-
-@dataclass(frozen=True)
-class CreateNoteRangeMessage:
-    start_date: str
-    end_date: str
-    note: str
-
-    @staticmethod
-    def parse(payload: Dict[str, Any]) -> Tuple[Optional["CreateNoteRangeMessage"], str]:
-        start_date = payload.get("startDate")
-        end_date = payload.get("endDate")
-        note = payload.get("note")
-        if not isinstance(start_date, str) or not start_date:
-            return None, "invalid_date"
-        if not isinstance(end_date, str) or not end_date:
-            return None, "invalid_date"
-        if not isinstance(note, str) or not note.strip():
-            return None, "invalid_note"
-        return CreateNoteRangeMessage(
-            start_date=start_date,
-            end_date=end_date,
-            note=note.strip(),
-        ), ""
-
-
-@dataclass(frozen=True)
-class DeleteNoteRangeMessage:
-    id: int
-    expected_version: int
-
-    @staticmethod
-    def parse(payload: Dict[str, Any]) -> Tuple[Optional["DeleteNoteRangeMessage"], str]:
-        note_value = payload.get("id")
-        version_value = payload.get("expectedVersion")
-        if not isinstance(note_value, (int, str)) or not isinstance(version_value, (int, str)):
-            return None, "invalid_note"
-        try:
-            note_id = int(note_value)
-            expected_version = int(version_value)
-        except (TypeError, ValueError):
-            return None, "invalid_note"
-        return DeleteNoteRangeMessage(id=note_id, expected_version=expected_version), ""
-
-
-@dataclass(frozen=True)
-class UpdateNoteRangeMessage:
-    id: int
-    note: str
-    expected_version: int
-
-    @staticmethod
-    def parse(payload: Dict[str, Any]) -> Tuple[Optional["UpdateNoteRangeMessage"], str]:
-        note_value = payload.get("id")
-        version_value = payload.get("expectedVersion")
-        note = payload.get("note")
-        if not isinstance(note_value, (int, str)) or not isinstance(version_value, (int, str)):
-            return None, "invalid_note"
-        if not isinstance(note, str) or not note.strip():
-            return None, "invalid_note"
-        try:
-            note_id = int(note_value)
-            expected_version = int(version_value)
-        except (TypeError, ValueError):
-            return None, "invalid_note"
-        return UpdateNoteRangeMessage(
-            id=note_id,
-            note=note.strip(),
-            expected_version=expected_version,
-        ), ""
-
-
-@dataclass(frozen=True)
-class UpdatePasswordMessage:
-    current_password: str
-    new_password: str
-    expected_version: int
-
-    @staticmethod
-    def parse(payload: Dict[str, Any]) -> Tuple[Optional["UpdatePasswordMessage"], str]:
-        current_password = payload.get("currentPassword")
-        new_password = payload.get("newPassword")
-        expected_value = payload.get("expectedVersion")
-        if not isinstance(expected_value, (int, str)):
-            return None, "invalid_version"
-        try:
-            expected_version = int(expected_value)
-        except (TypeError, ValueError):
-            return None, "invalid_version"
-        if not isinstance(current_password, str) or not isinstance(new_password, str):
-            return None, "invalid_password"
-        return UpdatePasswordMessage(
-            current_password=current_password,
-            new_password=new_password,
-            expected_version=expected_version,
-        ), ""
 
 
 @dataclass(frozen=True)
@@ -905,31 +562,6 @@ async def find_user_by_password(db: aiosqlite.Connection, password: str) -> Opti
     if len(matches) != 1:
         return None
     return matches[0]
-
-
-def parse_message(payload: Dict[str, Any]) -> tuple[str, Any, str]:
-    msg_type = payload.get("type")
-    if not isinstance(msg_type, str):
-        return "invalid_type", None, "invalid_type"
-    parser_map = {
-        "auth": AuthMessage.parse,
-        "create_category": CreateCategoryMessage.parse,
-        "create_day_label": CreateDayLabelMessage.parse,
-        "update_category": UpdateCategoryMessage.parse,
-        "update_day_label": UpdateDayLabelMessage.parse,
-        "delete_category": DeleteCategoryMessage.parse,
-        "delete_day_label": DeleteCategoryMessage.parse,
-        "set_day": SetDayMessage.parse,
-        "create_note_range": CreateNoteRangeMessage.parse,
-        "update_note_range": UpdateNoteRangeMessage.parse,
-        "delete_note_range": DeleteNoteRangeMessage.parse,
-        "update_password": UpdatePasswordMessage.parse,
-    }
-    parser = parser_map.get(msg_type)
-    if parser is None:
-        return "unknown_message", None, "unknown_message"
-    parsed, error = parser(payload)
-    return msg_type, parsed, error
 
 
 class AppState:
@@ -1704,7 +1336,7 @@ async def auth_ws(
             return await get_user_by_id(db, jwt_verify(cookie_token))
         except AuthError:
             await ws.send_str(
-                encode_message(ErrorMessage(type="error", message="auth_failed"))
+                encode_message(ErrorMessage(type="error", message=AUTH_FAILED))
             )
 
     for _ in range(3):
@@ -1713,27 +1345,27 @@ async def auth_ws(
             return None
         if msg.type != WSMsgType.TEXT:
             await ws.send_str(
-                encode_message(ErrorMessage(type="error", message="auth_required"))
+                encode_message(ErrorMessage(type="error", message=AUTH_REQUIRED))
             )
             continue
         try:
             payload = json.loads(msg.data)
         except json.JSONDecodeError:
             await ws.send_str(
-                encode_message(ErrorMessage(type="error", message="invalid_json"))
+                encode_message(ErrorMessage(type="error", message=INVALID_JSON))
             )
             continue
         msg_type, parsed, _error = parse_message(payload)
-        if msg_type != "auth" or not isinstance(parsed, AuthMessage):
+        if msg_type != "auth" or not isinstance(parsed, AuthCommand):
             await ws.send_str(
-                encode_message(ErrorMessage(type="error", message="auth_required"))
+                encode_message(ErrorMessage(type="error", message=AUTH_REQUIRED))
             )
             continue
         try:
             return await get_user_by_id(db, jwt_verify(parsed.token))
         except AuthError:
             await ws.send_str(
-                encode_message(ErrorMessage(type="error", message="auth_failed"))
+                encode_message(ErrorMessage(type="error", message=AUTH_FAILED))
             )
             continue
     await ws.close(code=4001, message=b"auth_failed")
@@ -1759,7 +1391,7 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                 payload = json.loads(msg.data)
             except json.JSONDecodeError:
                 await ws.send_str(
-                    encode_message(ErrorMessage(type="error", message="invalid_json"))
+                    encode_message(ErrorMessage(type="error", message=INVALID_JSON))
                 )
                 continue
             msg_type, parsed, error = parse_message(payload)
@@ -1774,218 +1406,14 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                 active_user = await get_user_by_id(state.db, authed_user.id)
             except AuthError:
                 await ws.send_str(
-                    encode_message(ErrorMessage(type="error", message="auth_failed"))
+                    encode_message(ErrorMessage(type="error", message=AUTH_FAILED))
                 )
                 break
-            match parsed:
-                case CreateDayLabelMessage(name=name, color=color, marker_style=marker_style):
-                    if not active_user.is_admin:
-                        await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
-                        continue
-                    day_label = await state.create_day_label(name, color, marker_style)
-                    await state.broadcast_filtered(
-                        lambda user: DayLabelCreatedMessage(type="day_label_created", dayLabel=day_label)
-                    )
-                case CreateCategoryMessage(name=name, color=color):
-                    if not active_user.is_admin:
-                        await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
-                        continue
-                    category = await state.create_category(name, color)
-                    await state.broadcast_filtered(
-                        lambda user: CategoryCreatedMessage(type="category_created", category=category)
-                        if user.is_admin
-                        else None
-                    )
-                    await state.refresh_readonly_sessions()
-                case UpdateDayLabelMessage(
-                    id=label_id,
-                    name=name,
-                    color=color,
-                    marker_style=marker_style,
-                    expected_version=expected_version,
-                ):
-                    if not active_user.is_admin:
-                        await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
-                        continue
-                    try:
-                        day_label = await state.update_day_label(
-                            label_id, name, color, marker_style, expected_version
-                        )
-                    except ValueError:
-                        await ws.send_str(
-                            encode_message(ErrorMessage(type="error", message="version_conflict"))
-                        )
-                        continue
-                    await state.broadcast_filtered(
-                        lambda user: DayLabelUpdatedMessage(type="day_label_updated", dayLabel=day_label)
-                    )
-                case UpdateCategoryMessage(
-                    id=category_id,
-                    name=name,
-                    color=color,
-                    expected_version=expected_version,
-                ):
-                    if not active_user.is_admin:
-                        await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
-                        continue
-                    try:
-                        category = await state.update_category(category_id, name, color, expected_version)
-                    except ValueError:
-                        await ws.send_str(
-                            encode_message(ErrorMessage(type="error", message="version_conflict"))
-                        )
-                        continue
-                    await state.broadcast_filtered(
-                        lambda user: CategoryUpdatedMessage(type="category_updated", category=category)
-                        if user.is_admin
-                        else None
-                    )
-                    await state.refresh_readonly_sessions()
-                case DeleteCategoryMessage(id=category_id, expected_version=expected_version):
-                    if not active_user.is_admin:
-                        await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
-                        continue
-                    try:
-                        if msg_type == "delete_day_label":
-                            await state.delete_day_label(category_id, expected_version)
-                        else:
-                            await state.delete_category(category_id, expected_version)
-                    except aiosqlite.IntegrityError:
-                        await ws.send_str(
-                            encode_message(ErrorMessage(type="error", message="category_in_use"))
-                        )
-                        continue
-                    except ValueError:
-                        await ws.send_str(
-                            encode_message(ErrorMessage(type="error", message="version_conflict"))
-                        )
-                        continue
-                    if msg_type == "delete_day_label":
-                        await state.broadcast_filtered(
-                            lambda user: DayLabelDeletedMessage(type="day_label_deleted", id=category_id)
-                        )
-                        continue
-                    await state.broadcast_filtered(
-                        lambda user: CategoryDeletedMessage(type="category_deleted", id=category_id)
-                        if user.is_admin
-                        else None
-                    )
-                    await state.refresh_readonly_sessions()
-                case SetDayMessage(
-                    date=date,
-                    category_id=category_id,
-                    corner_label_id=corner_label_id,
-                    circle_label_id=circle_label_id,
-                    expected_version=expected_version,
-                ):
-                    if not active_user.is_admin:
-                        await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
-                        continue
-                    try:
-                        if category_id is None and corner_label_id is None and circle_label_id is None:
-                            await state.delete_day(date, expected_version)
-                            await state.broadcast_filtered(
-                                lambda user: DayDeletedMessage(type="day_deleted", date=date)
-                                if user.is_admin
-                                else None
-                            )
-                            await state.refresh_readonly_sessions()
-                        else:
-                            entry = await state.upsert_day(
-                                date,
-                                category_id,
-                                corner_label_id,
-                                circle_label_id,
-                                expected_version,
-                            )
-                            await state.broadcast_filtered(
-                                lambda user: DayUpdatedMessage(type="day_updated", day=entry)
-                                if user.is_admin
-                                else None
-                            )
-                            await state.refresh_readonly_sessions()
-                    except ValueError as exc:
-                        await ws.send_str(
-                            encode_message(ErrorMessage(type="error", message=str(exc)))
-                        )
-                        continue
-                case CreateNoteRangeMessage(start_date=start_date, end_date=end_date, note=note):
-                    if not active_user.is_admin:
-                        await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
-                        continue
-                    try:
-                        note_range = await state.create_note_range(start_date, end_date, note)
-                    except ValueError as exc:
-                        await ws.send_str(
-                            encode_message(ErrorMessage(type="error", message=str(exc)))
-                        )
-                        continue
-                    await state.broadcast_filtered(
-                        lambda user: NoteRangeCreatedMessage(type="note_range_created", noteRange=note_range)
-                        if user.is_admin
-                        else None
-                    )
-                    await state.refresh_readonly_sessions()
-                case UpdateNoteRangeMessage(id=note_id, note=note, expected_version=expected_version):
-                    if not active_user.is_admin:
-                        await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
-                        continue
-                    try:
-                        note_range = await state.update_note_range(note_id, note, expected_version)
-                    except ValueError as exc:
-                        await ws.send_str(
-                            encode_message(ErrorMessage(type="error", message=str(exc)))
-                        )
-                        continue
-                    await state.broadcast_filtered(
-                        lambda user: NoteRangeUpdatedMessage(type="note_range_updated", noteRange=note_range)
-                        if user.is_admin
-                        else None
-                    )
-                    await state.refresh_readonly_sessions()
-                case DeleteNoteRangeMessage(id=note_id, expected_version=expected_version):
-                    if not active_user.is_admin:
-                        await ws.send_str(encode_message(ErrorMessage(type="error", message="read_only")))
-                        continue
-                    try:
-                        await state.delete_note_range(note_id, expected_version)
-                    except ValueError as exc:
-                        await ws.send_str(
-                            encode_message(ErrorMessage(type="error", message=str(exc)))
-                        )
-                        continue
-                    await state.broadcast_filtered(
-                        lambda user: NoteRangeDeletedMessage(type="note_range_deleted", id=note_id)
-                        if user.is_admin
-                        else None
-                    )
-                    await state.refresh_readonly_sessions()
-                case UpdatePasswordMessage(
-                    current_password=current_password,
-                    new_password=new_password,
-                    expected_version=expected_version,
-                ):
-                    try:
-                        user_snapshot = await state.update_password(
-                            active_user,
-                            current_password,
-                            new_password,
-                            expected_version,
-                        )
-                    except ValueError as exc:
-                        await ws.send_str(
-                            encode_message(ErrorMessage(type="error", message=str(exc)))
-                        )
-                        continue
-                    await ws.send_str(
-                        encode_message(
-                            PasswordUpdatedMessage(type="password_updated", user=user_snapshot)
-                        )
-                    )
-                case _:
-                    await ws.send_str(
-                        encode_message(ErrorMessage(type="error", message="unknown_message"))
-                    )
+            handler = WS_COMMAND_HANDLERS.get(type(parsed))
+            if handler is None:
+                await send_ws_error(ws, UNKNOWN_MESSAGE)
+                continue
+            await handler(state, ws, active_user, parsed)
             continue
         if msg.type == WSMsgType.ERROR:
             break
