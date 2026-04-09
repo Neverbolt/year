@@ -50,7 +50,6 @@
           <div class="toolbar paint-toolbar" id="paintToolbar">
             <div class="paint-meta">
               <strong id="paintToolbarTitle">Quick assign</strong>
-              <span class="helper" id="paintToolbarHint">Click a category to arm it · drag like text selection · release to save the final range.</span>
             </div>
             <div class="swatch-row" id="brushPalette"></div>
           </div>
@@ -124,34 +123,33 @@
               </div>
             </div>
 
+            <div id="userList" class="user-list"></div>
+
             <form id="userForm" class="stack compact panel-block user-form">
-              <div class="two-column-grid">
+                <div class="two-column-grid">
                 <label>
-                  Internal name
-                  <input type="text" id="userNameInput" maxlength="32" required />
+                    Internal name
+                    <input type="text" id="userNameInput" maxlength="32" required />
                 </label>
                 <label>
-                  Role
-                  <select id="userRoleInput">
+                    Role
+                    <select id="userRoleInput">
                     <option value="readonly">Read only</option>
                     <option value="admin">Admin</option>
-                  </select>
+                    </select>
                 </label>
-              </div>
-              <label>
-                Password
-                <input type="password" id="userPasswordInput" minlength="8" required />
-              </label>
-              <fieldset class="permission-fieldset">
-                <legend>Category access</legend>
-                <div class="permission-list" id="newUserPermissions"></div>
-                <p class="helper" id="newUserPermissionHint">Read-only users only see the categories checked here. Admins always see everything.</p>
-              </fieldset>
-              <button type="submit">Create user</button>
-              <p class="helper" id="userMessage"></p>
+                </div>
+                <label> Password
+                    <input type="password" id="userPasswordInput" minlength="8" required />
+                </label>
+                <fieldset class="permission-fieldset">
+                    <legend>Category access</legend>
+                    <div class="permission-list" id="newUserPermissions"></div>
+                    <p class="helper" id="newUserPermissionHint">Read-only users only see the categories checked here. Admins always see everything.</p>
+                </fieldset>
+                <button type="submit">Create user</button>
+                <p class="helper" id="userMessage"></p>
             </form>
-
-            <div id="userList" class="user-list"></div>
           </section>
         </div>
       </div>

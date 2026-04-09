@@ -761,10 +761,6 @@ select:disabled {
   min-width: 0;
 }
 
-.read-only-user #paintToolbarHint {
-  display: none;
-}
-
 
 .paint-mode-active .day-cell,
 .paint-mode-active .day-card {

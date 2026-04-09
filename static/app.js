@@ -61,7 +61,6 @@ const suggestedColors = document.getElementById("suggestedColors");
 const brushPalette = document.getElementById("brushPalette");
 const dayLabelList = document.getElementById("dayLabelList");
 const paintToolbarTitle = document.getElementById("paintToolbarTitle");
-const paintToolbarHint = document.getElementById("paintToolbarHint");
 const userAdminSection = document.getElementById("userAdminSection");
 const userForm = document.getElementById("userForm");
 const userNameInput = document.getElementById("userNameInput");
@@ -108,9 +107,6 @@ function syncAccessUI() {
   document.body.classList.toggle("read-only-user", !admin);
   setButtonsDisabled(!admin, [addCategoryBtn, addDayLabelBtn, saveDayBtn, clearDayBtn, cornerLabelSelect, circleLabelSelect]);
   paintToolbarTitle.textContent = admin ? "Quick assign" : "Filter";
-  paintToolbarHint.textContent = admin
-    ? "Pick a category or Notes · drag like text selection · release to save the final range."
-    : "Click a category chip to filter the calendar.";
 }
 
 function formatDate(date) {
@@ -253,7 +249,7 @@ function getSelectedPermissionIds(container) {
   );
 }
 
-function renderPermissionSelector(container, selectedIds = [], disabled = false) {
+function renderPermissionSelector(container, selectedIds = []) {
   container.innerHTML = "";
   if (!state.categories.length) {
     const empty = document.createElement("p");
@@ -269,7 +265,6 @@ function renderPermissionSelector(container, selectedIds = [], disabled = false)
     input.type = "checkbox";
     input.value = String(category.id);
     input.checked = selectedIds.includes(category.id);
-    input.disabled = disabled;
     const dot = document.createElement("span");
     dot.className = "color-dot";
     dot.style.background = category.color;
@@ -417,8 +412,8 @@ function renderBrushPalette() {
   brushPalette.innerHTML = "";
   const options = isAdmin()
     ? [
+        { id: "__note__", name: "Note", color: "#f8fafc" },
         { id: "", name: "Unassigned", color: "#020617" },
-        { id: "__note__", name: "Notes", color: "#f8fafc" },
         ...state.categories,
       ]
     : [{ id: "all", name: "All", color: "#020617" }, ...state.categories];
@@ -604,15 +599,12 @@ function renderManagedUsers() {
     permissionsBlock.append(permissionsTitle, permissionsList);
 
     const syncPermissions = () => {
-      const adminRole = roleSelect.value === "admin";
+      if (roleSelect.value === "admin") return;
       renderPermissionSelector(
         permissionsList,
         managedUser.categoryIds,
-        adminRole
       );
-      permissionsTitle.textContent = adminRole
-        ? "Admins always see every category."
-        : "Checked categories are visible to this read-only user.";
+      permissionsTitle.textContent = "Checked categories are visible to this read-only user.";
     };
     syncPermissions();
     roleSelect.addEventListener("change", syncPermissions);

@@ -25,9 +25,7 @@ jobs:
 
           echo "Tagging image $IMAGE_NAME with timestamp $TIMESTAMP"
 
-          # Build the Docker image using source/Dockerfile.
-          docker build -t $IMAGE_NAME:$TIMESTAMP -t $IMAGE_NAME:latest -f source/Dockerfile source/
+          docker build -t $IMAGE_NAME:$TIMESTAMP -t $IMAGE_NAME:latest -f Dockerfile .
 
-          # Push the image to GitHub Container Registry.
           docker push $IMAGE_NAME:$TIMESTAMP
           docker push $IMAGE_NAME:latest
