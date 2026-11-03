@@ -799,7 +799,6 @@ select:disabled {
 }
 
 /* Shared primitives for the year summary and future design proposals. */
-.eyebrow { margin: 0 0 .3rem; color: var(--accent); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; }
 .year-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; margin: 1.2rem 0; }
 .year-stats > div { display: flex; flex-direction: column; gap: .4rem; padding: 1rem .7rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
 .year-stats strong { font-size: 1.7rem; font-variant-numeric: tabular-nums; }
@@ -813,3 +812,6 @@ select:disabled {
 button:disabled { opacity: .5; cursor: not-allowed; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 520px) { .year-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .toolbar-right { flex-wrap: wrap; } }
+
+.year-navigation { display: grid; grid-template-columns: auto minmax(5ch, 1fr) auto; align-items: center; gap: 1rem; flex: 1; }
+.year-navigation h2 { text-align: center; font-variant-numeric: tabular-nums; }

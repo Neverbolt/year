@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync('static/app.js', 'utf8');
 // Exercise production date/contrast/summary functions without a browser dependency.
-const names = ['readableInk', 'formatDate', 'parseDate', 'addDays', 'dateRange', 'getEntry', 'getNoteRangeForDate', 'getDayLabel', 'isAdmin', 'renderYearOverview'];
+const names = ['readableInk', 'formatDate', 'parseDate', 'addDays', 'dateRange', 'getEntry', 'getNoteRangeForDate', 'getDayLabel', 'isAdmin', 'navigateOverviewYear', 'renderYearOverview'];
 const extracted = names.map(name => {
   const start = source.indexOf(`function ${name}(`);
   const next = source.indexOf('\nfunction ', start + 1);
@@ -40,4 +40,17 @@ assert.equal(context.populateWeekendsBtn.disabled,true);
 context.state.userRole='readonly';
 call('renderYearOverview()');
 assert.equal(context.populateWeekendsBtn.disabled,true);
-console.log('Frontend checks passed: dark/bright contrast, leap year, DST, year-scoped notes, statistics, weekend preview and access state.');
+context.renderCalendar = () => call('renderYearOverview()');
+call('navigateOverviewYear(-1)');
+assert.equal(context.state.currentDate.getFullYear(), 2025);
+assert.equal(elements.get('yearOverviewTitle').textContent, '2025');
+assert.equal(elements.get('yearStats').children[2].children[0].textContent, 2);
+call('navigateOverviewYear(1)');
+assert.equal(context.state.currentDate.getFullYear(), 2026);
+context.state.currentDate = new Date(2027, 0, 1);
+call('navigateOverviewYear(1)');
+assert.equal(elements.get('yearStats').children[0].children[0].textContent, 366);
+context.state.currentDate = new Date(1000, 0, 1);
+call('navigateOverviewYear(-1)');
+assert.equal(context.state.currentDate.getFullYear(), 1000);
+console.log('Frontend checks passed: dark/bright contrast, leap year, DST, year-scoped notes, statistics, weekend preview, access state and year navigation.');

@@ -1545,6 +1545,15 @@ document.getElementById("toggleYearOverview").addEventListener("click", () => {
   openModal("yearOverviewModal");
   modals.yearOverviewModal.querySelector(".modal-card").focus();
 });
+function navigateOverviewYear(delta) {
+  const year = state.currentDate.getFullYear() + delta;
+  if (year < 1000 || year > 9998) return;
+  state.currentDate = new Date(year, 0, 1);
+  yearMessage.textContent = "";
+  renderCalendar();
+}
+document.getElementById("overviewPrevYear").addEventListener("click", () => navigateOverviewYear(-1));
+document.getElementById("overviewNextYear").addEventListener("click", () => navigateOverviewYear(1));
 weekendLabelSelect.addEventListener("change", renderYearOverview);
 populateWeekendsBtn.addEventListener("click", () => {
   if (!isAdmin() || weekendPending || state.ws?.readyState !== WebSocket.OPEN) return;
@@ -1600,7 +1609,9 @@ function renderYearOverview() {
   const entries = dates.map(getEntry).filter(Boolean);
   const categorized = entries.filter(entry => entry.category_id != null).length;
   const noted = dates.filter(iso => getNoteRangeForDate(iso)).length;
-  document.getElementById("yearOverviewTitle").textContent = `${year} overview`;
+  document.getElementById("yearOverviewTitle").textContent = String(year);
+  document.getElementById("overviewPrevYear").disabled = year <= 1000 || weekendPending;
+  document.getElementById("overviewNextYear").disabled = year >= 9998 || weekendPending;
   const stats = document.getElementById("yearStats");
   stats.replaceChildren();
   [[dates.length, "Days in year"], [categorized, "Categorized days"], [noted, "Days with notes"], [weekends.length, "Weekend days"]].forEach(([count, label]) => {
