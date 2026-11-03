@@ -71,7 +71,14 @@ const newUserPermissionHint = document.getElementById("newUserPermissionHint");
 const userMessage = document.getElementById("userMessage");
 const userList = document.getElementById("userList");
 
+const yearMessage = document.getElementById("yearMessage");
+const weekendLabelSelect = document.getElementById("weekendLabelSelect");
+const populateWeekendsBtn = document.getElementById("populateWeekends");
+let weekendPending = false;
+let modalTrigger = null;
+
 const modals = {
+  yearOverviewModal: document.getElementById("yearOverviewModal"),
   categoriesModal: document.getElementById("categoriesModal"),
   configModal: document.getElementById("configModal"),
   categoryModal: document.getElementById("categoryModal"),
@@ -148,6 +155,7 @@ function daysInMonth(year, month) {
 }
 
 function openModal(name) {
+  modalTrigger = document.activeElement;
   Object.entries(modals).forEach(([key, modal]) => {
     modal.classList.toggle("hidden", key !== name);
     modal.setAttribute("aria-hidden", key === name ? "false" : "true");
@@ -159,6 +167,7 @@ function closeModal(name) {
   if (!modal) return;
   modal.classList.add("hidden");
   modal.setAttribute("aria-hidden", "true");
+  if (name === "yearOverviewModal") modalTrigger?.focus();
   if (name === "dayModal") {
     state.pendingNoteRange = null;
     state.selectedNoteRangeId = null;
@@ -691,6 +700,16 @@ function setSelectedDate(date) {
   renderCalendar();
 }
 
+function readableInk(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return "#ffffff";
+  const rgb = hex.replace("#", "").match(/.{2}/g).map(value => {
+    const channel = parseInt(value, 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+  return (luminance + 0.05) / 0.05 > 1.05 / (luminance + 0.05) ? "#000000" : "#ffffff";
+}
+
 function buildDayCell(dateObj, compact = true) {
   const iso = formatDate(dateObj);
   const entry = getEntry(iso);
@@ -701,6 +720,7 @@ function buildDayCell(dateObj, compact = true) {
   element.dataset.date = iso;
   const color = entry ? getCategoryColor(entry.category_id) : "#1e293b";
   element.style.background = color;
+  element.style.setProperty("--day-ink", readableInk(color));
   const cornerLabelId = entry?.corner_label_id ?? null;
   const circleLabelId = entry?.circle_label_id ?? null;
   if (cornerLabelId) {
@@ -857,6 +877,7 @@ function syncCalendarHandlers() {
 }
 
 function renderCalendar() {
+  renderYearOverview();
   updateViewButtons();
   renderBrushPalette();
   syncCalendarHandlers();
@@ -1141,6 +1162,7 @@ function connectWebSocket() {
 
   state.ws.addEventListener("open", () => {
     setStatus("Connected", true);
+    renderYearOverview();
     reconnectDelay = 500;
     if (state.token) sendMessage({ type: "auth", token: state.token });
   });
@@ -1148,6 +1170,11 @@ function connectWebSocket() {
   state.ws.addEventListener("message", async (event) => {
     const data = JSON.parse(event.data);
     if (data.type === "snapshot") await handleSnapshot(data);
+    if (data.type === "weekends_populated") {
+      weekendPending = false;
+      yearMessage.textContent = `${data.year}: added weekend labels to ${data.count} days. Existing markers were kept.`;
+      renderYearOverview();
+    }
     if (data.type === "day_label_created") {
       state.dayLabels.push(data.dayLabel);
       renderDayLabelSelect();
@@ -1246,6 +1273,9 @@ function connectWebSocket() {
       if (data.user?.version) state.userVersion = data.user.version;
     }
     if (data.type === "error") {
+      weekendPending = false;
+      yearMessage.textContent = data.message.replaceAll("_", " ");
+      renderYearOverview();
       const message = data.message.replaceAll("_", " ");
       if (data.message.startsWith("invalid_") || data.message === "category_in_use") {
         categoryMessage.textContent = message;
@@ -1259,6 +1289,9 @@ function connectWebSocket() {
 
   state.ws.addEventListener("close", () => {
     setStatus("Disconnected");
+    if (weekendPending) yearMessage.textContent = "Connection lost. Reconnect and retry; existing labels are kept.";
+    weekendPending = false;
+    renderYearOverview();
     if (reconnectTimer) clearTimeout(reconnectTimer);
     if (!state.sessionActive) return;
     reconnectTimer = setTimeout(() => {
@@ -1506,6 +1539,21 @@ toggleConfig.addEventListener("click", async () => {
   if (isAdmin()) await fetchManagedUsers();
   openModal("configModal");
 });
+document.getElementById("toggleYearOverview").addEventListener("click", () => {
+  yearMessage.textContent = "";
+  renderYearOverview();
+  openModal("yearOverviewModal");
+  modals.yearOverviewModal.querySelector(".modal-card").focus();
+});
+weekendLabelSelect.addEventListener("change", renderYearOverview);
+populateWeekendsBtn.addEventListener("click", () => {
+  if (!isAdmin() || weekendPending || state.ws?.readyState !== WebSocket.OPEN) return;
+  weekendPending = true;
+  yearMessage.textContent = "Adding weekend labels…";
+  sendMessage({type: "populate_weekends", year: state.currentDate.getFullYear(), labelId: Number(weekendLabelSelect.value)});
+  renderYearOverview();
+});
+
 toggleCategories.addEventListener("click", () => openModal("categoriesModal"));
 document.querySelectorAll("[data-close-modal]").forEach((element) => {
   element.addEventListener("click", () => closeModal(element.dataset.closeModal));
@@ -1517,6 +1565,19 @@ document.addEventListener("pointermove", (event) => {
 document.addEventListener("pointerup", stopPainting);
 document.addEventListener("pointercancel", stopPainting);
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Tab" && !modals.yearOverviewModal.classList.contains("hidden")) {
+    const controls = [...modals.yearOverviewModal.querySelectorAll('button:not(:disabled), select:not(:disabled)')]
+      .filter(element => !element.closest(".hidden"));
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement.classList.contains("modal-card"))) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  }
   if (event.key === "Escape") {
     closeAllModals();
     stopPainting();
@@ -1530,3 +1591,61 @@ renderBrushPalette();
 renderCalendar();
 renderManagedUsers();
 restoreSession();
+
+
+function renderYearOverview() {
+  const year = state.currentDate.getFullYear();
+  const dates = dateRange(`${year}-01-01`, `${year}-12-31`);
+  const weekends = dates.filter(iso => [0, 6].includes(parseDate(iso).getDay()));
+  const entries = dates.map(getEntry).filter(Boolean);
+  const categorized = entries.filter(entry => entry.category_id != null).length;
+  const noted = dates.filter(iso => getNoteRangeForDate(iso)).length;
+  document.getElementById("yearOverviewTitle").textContent = `${year} overview`;
+  const stats = document.getElementById("yearStats");
+  stats.replaceChildren();
+  [[dates.length, "Days in year"], [categorized, "Categorized days"], [noted, "Days with notes"], [weekends.length, "Weekend days"]].forEach(([count, label]) => {
+    const card = document.createElement("div");
+    const number = document.createElement("strong");
+    number.textContent = count;
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    card.append(number, caption);
+    stats.append(card);
+  });
+  const breakdown = (id, items) => {
+    const container = document.getElementById(id);
+    container.replaceChildren();
+    items.forEach(([name, count, color]) => {
+      const row = document.createElement("div");
+      row.className = "stat-row";
+      const dot = document.createElement("span");
+      dot.className = "color-dot";
+      dot.style.background = color;
+      const label = document.createElement("span");
+      label.textContent = name;
+      const value = document.createElement("strong");
+      value.textContent = `${count} days`;
+      row.append(dot, label, value);
+      container.append(row);
+    });
+    if (!items.length) container.textContent = "Nothing added yet.";
+  };
+  breakdown("yearCategoryStats", [...state.categories.map(cat => [cat.name, entries.filter(e => e.category_id === cat.id).length, cat.color]), ["Uncategorized", dates.length - categorized, "#475569"]]);
+  breakdown("yearLabelStats", state.dayLabels.map(label => [label.name, entries.filter(e => e.corner_label_id === label.id || e.circle_label_id === label.id).length, label.color]));
+  document.getElementById("weekendTools").classList.toggle("hidden", !isAdmin());
+  const selected = weekendLabelSelect.value;
+  weekendLabelSelect.replaceChildren(...state.dayLabels.map(label => new Option(`${label.name} · ${label.marker_style}`, label.id)));
+  if (state.dayLabels.some(label => String(label.id) === selected)) weekendLabelSelect.value = selected;
+  else {
+    const defaultLabel = state.dayLabels.find(label => /weekend/i.test(label.name));
+    if (defaultLabel) weekendLabelSelect.value = defaultLabel.id;
+  }
+  const label = getDayLabel(weekendLabelSelect.value);
+  const slot = label?.marker_style === "circle" ? "circle_label_id" : "corner_label_id";
+  const available = weekends.filter(iso => !getEntry(iso)?.[slot]).length;
+  document.getElementById("weekendPreview").textContent = label
+    ? `${available} weekends to label · ${weekends.length - available} existing markers kept.`
+    : "Create a weekend label in Day labels first, then choose it here.";
+  populateWeekendsBtn.disabled = !isAdmin() || !label || !available || weekendPending || state.ws?.readyState !== WebSocket.OPEN;
+  weekendLabelSelect.disabled = weekendPending;
+}

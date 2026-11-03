@@ -6,7 +6,7 @@ import os
 import secrets
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import aiosqlite
@@ -867,6 +867,39 @@ class AppState:
                 await self.db.rollback()
                 raise ValueError("version_conflict")
             await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+    async def refresh_all_sessions(self) -> None:
+        dead = []
+        for session in await self._snapshot_sessions():
+            await self._send_ws(session.ws, encode_message(await self.build_snapshot(session.user)), dead)
+        await self.unregister_dead(dead)
+
+    async def populate_weekends(self, year: int, label_id: int) -> int:
+        # One transaction, filling only an empty marker slot. Repeating is safe.
+        await self.db.execute("BEGIN IMMEDIATE")
+        try:
+            async with self.db.execute("SELECT marker_style FROM day_labels WHERE id = ?", (label_id,)) as cursor:
+                label = await cursor.fetchone()
+            if label is None:
+                raise ValueError("invalid_day_label")
+            column = "circle_label_id" if label[0] == "circle" else "corner_label_id"
+            count = 0
+            current = date(year, 1, 1)
+            while current.year == year:
+                if current.weekday() >= 5:
+                    cursor = await self.db.execute(
+                        f"""INSERT INTO days (date, {column}, version) VALUES (?, ?, 1)
+                        ON CONFLICT(date) DO UPDATE SET {column} = excluded.{column},
+                        version = days.version + 1 WHERE days.{column} IS NULL""",
+                        (current.isoformat(), label_id),
+                    )
+                    count += cursor.rowcount
+                current += timedelta(days=1)
+            await self.db.commit()
+            return count
         except Exception:
             await self.db.rollback()
             raise

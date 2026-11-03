@@ -8,6 +8,7 @@ from ws_commands import (
     DeleteDayLabelCommand,
     DeleteNoteRangeCommand,
     SetDayCommand,
+    PopulateWeekendsCommand,
     UpdateCategoryCommand,
     UpdateDayLabelCommand,
     UpdateNoteRangeCommand,
@@ -19,6 +20,7 @@ from ws_handlers import WS_COMMAND_HANDLERS
 class WsRegistryTests(unittest.TestCase):
     def test_handlers_registered_for_all_runtime_commands(self) -> None:
         expected_commands = {
+            PopulateWeekendsCommand,
             CreateDayLabelCommand,
             CreateCategoryCommand,
             UpdateDayLabelCommand,

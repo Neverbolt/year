@@ -344,7 +344,7 @@ label {
   left: 3px;
   font-size: 0.54rem;
   line-height: 1;
-  color: rgba(226, 232, 240, 0.9);
+  color: var(--day-ink, var(--text));
   z-index: 2;
 }
 
@@ -386,7 +386,7 @@ label {
 }
 
 .day-card h4 {
-  color: rgba(226, 232, 240, 0.92);
+  color: var(--day-ink, var(--text));
   font-size: 0.8rem;
   position: relative;
   z-index: 2;
@@ -395,7 +395,7 @@ label {
 .day-card p {
   margin-top: 0.45rem;
   font-size: 0.75rem;
-  color: #082032;
+  color: var(--day-ink, var(--text));
 }
 
 .note-row-label {
@@ -406,7 +406,7 @@ label {
   width: calc((100% * var(--note-span)) + (var(--calendar-gap) * (var(--note-span) - 1)) - 0.9rem);
   font-size: 0.75rem;
   line-height: 1.1;
-  color: #082032;
+  color: var(--day-ink, var(--text));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -420,7 +420,7 @@ label {
   width: calc((100% * var(--note-span)) + (var(--calendar-gap) * (var(--note-span) - 1)) - 10px);
   font-size: 0.52rem;
   line-height: 1;
-  color: rgba(2, 6, 23, 0.95);
+  color: var(--day-ink, var(--text));
 }
 
 .day-cell.dim,
@@ -797,3 +797,19 @@ select:disabled {
 .read-only-user .paint-toolbar {
   top: 0;
 }
+
+/* Shared primitives for the year summary and future design proposals. */
+.eyebrow { margin: 0 0 .3rem; color: var(--accent); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; }
+.year-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; margin: 1.2rem 0; }
+.year-stats > div { display: flex; flex-direction: column; gap: .4rem; padding: 1rem .7rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.year-stats strong { font-size: 1.7rem; font-variant-numeric: tabular-nums; }
+.year-stats span { font-size: .75rem; color: var(--muted); }
+.overview-section { border-top: 1px solid var(--border); padding: 1rem 0 .3rem; }
+.overview-section h3 { margin: 0 0 .65rem; font-size: .95rem; }
+.stat-breakdown { display: grid; gap: .6rem; font-size: .85rem; color: var(--muted); }
+.stat-row { display: grid; grid-template-columns: auto 1fr auto; gap: .6rem; align-items: center; }
+.stat-row strong { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.weekend-tools label { margin-top: 1rem; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 520px) { .year-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .toolbar-right { flex-wrap: wrap; } }

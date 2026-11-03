@@ -19,6 +19,7 @@ from errors import (
 )
 from ws_commands import (
     AuthCommand,
+    PopulateWeekendsCommand,
     CreateCategoryCommand,
     CreateDayLabelCommand,
     CreateNoteRangeCommand,
@@ -35,6 +36,7 @@ from ws_commands import (
 )
 
 COMMAND_MODELS: dict[str, type[WsCommand]] = {
+    "populate_weekends": PopulateWeekendsCommand,
     "auth": AuthCommand,
     "create_category": CreateCategoryCommand,
     "create_day_label": CreateDayLabelCommand,

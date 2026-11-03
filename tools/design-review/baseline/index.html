@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Year Overview</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="auth-only">
+    <div id="loginScreen" class="login-screen">
+      <form id="loginForm" class="login-card">
+        <h1>Year Overview</h1>
+        <p class="helper">Sign in to load your calendar.</p>
+        <label>
+          Password
+          <input type="password" name="password" autocomplete="current-password" required />
+        </label>
+        <button type="submit">Sign in</button>
+        <p class="helper error-text" id="loginError"></p>
+      </form>
+    </div>
+
+    <div id="appShell" class="app-shell hidden">
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand">Year Overview</div>
+          <div class="status" id="connectionStatus">Offline</div>
+        </div>
+        <div class="toolbar-right">
+          <button class="ghost" id="toggleCategories">Day labels</button>
+          <button class="ghost" id="toggleConfig">Config</button>
+        </div>
+      </header>
+
+      <main class="app-main">
+        <section class="workbench">
+          <div class="toolbar main-toolbar">
+            <div class="toolbar-left">
+              <button id="prevPeriod">◀</button>
+              <div id="currentLabel"></div>
+              <button id="nextPeriod">▶</button>
+              <div class="view-controls inline-view-controls">
+                <button class="view-btn" data-view="year">Year</button>
+                <button class="view-btn" data-view="month">Month</button>
+                <button class="view-btn" data-view="week">Week</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="toolbar paint-toolbar" id="paintToolbar">
+            <div class="paint-meta">
+              <strong id="paintToolbarTitle">Quick assign</strong>
+            </div>
+            <div class="swatch-row" id="brushPalette"></div>
+          </div>
+
+          <div class="calendar-wrap">
+            <div id="calendar" class="calendar"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="categoriesModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="categoriesModal"></div>
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Day labels</h2>
+          <button class="ghost icon-btn" data-close-modal="categoriesModal">✕</button>
+        </div>
+        <div class="sticky-panel category-controls">
+          <label>
+            Filter
+            <select id="categoryFilter"></select>
+          </label>
+          <button id="addCategory">Add category</button>
+        </div>
+        <div class="stack compact label-section">
+          <div class="label-section-header">
+            <div>
+              <h3>Day labels</h3>
+              <p class="helper">Create corner or circle day markers like weekend, holiday, or non-working day.</p>
+            </div>
+            <button id="addDayLabel" type="button">Add label</button>
+          </div>
+          <div id="dayLabelList" class="category-list"></div>
+        </div>
+        <div class="stack compact label-section">
+          <div class="label-section-header">
+            <div>
+              <h3>Main categories</h3>
+              <p class="helper">These still control the full-day color fill.</p>
+            </div>
+          </div>
+          <div id="categoryList" class="category-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="configModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="configModal"></div>
+      <div class="modal-card narrow">
+        <div class="modal-header">
+          <h2>Config</h2>
+          <button class="ghost icon-btn" data-close-modal="configModal">✕</button>
+        </div>
+        <div class="stack config-sections">
+          <section class="config-section">
+            <div class="section-header compact-header">
+              <div>
+                <h3>Session</h3>
+                <p class="helper">Use the user cards below to rotate passwords. Sign out here when you want to switch accounts.</p>
+              </div>
+            </div>
+            <button type="button" class="ghost" id="logoutButton">Sign out</button>
+          </section>
+
+          <section id="userAdminSection" class="config-section hidden">
+            <div class="section-header">
+              <div>
+                <h3>User access</h3>
+                <p class="helper">Create read-only accounts and choose which categories each one can view.</p>
+              </div>
+            </div>
+
+            <div id="userList" class="user-list"></div>
+
+            <form id="userForm" class="stack compact panel-block user-form">
+                <div class="two-column-grid">
+                <label>
+                    Internal name
+                    <input type="text" id="userNameInput" maxlength="32" required />
+                </label>
+                <label>
+                    Role
+                    <select id="userRoleInput">
+                    <option value="readonly">Read only</option>
+                    <option value="admin">Admin</option>
+                    </select>
+                </label>
+                </div>
+                <label> Password
+                    <input type="password" id="userPasswordInput" minlength="8" required />
+                </label>
+                <fieldset class="permission-fieldset">
+                    <legend>Category access</legend>
+                    <div class="permission-list" id="newUserPermissions"></div>
+                    <p class="helper" id="newUserPermissionHint">Read-only users only see the categories checked here. Admins always see everything.</p>
+                </fieldset>
+                <button type="submit">Create user</button>
+                <p class="helper" id="userMessage"></p>
+            </form>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div id="categoryModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="categoryModal"></div>
+      <div class="modal-card narrow">
+        <div class="modal-header">
+          <h2 id="categoryModalTitle">New category</h2>
+          <button class="ghost icon-btn" data-close-modal="categoryModal">✕</button>
+        </div>
+        <form id="categoryForm" class="stack compact">
+          <input type="hidden" id="categoryKindInput" value="category" />
+          <label id="dayLabelStyleField" class="hidden">
+            Marker style
+            <select id="dayLabelStyleInput">
+              <option value="corner">Corner fold</option>
+              <option value="circle">Circle behind day number</option>
+            </select>
+          </label>
+          <label>
+            Name
+            <input type="text" id="categoryNameInput" maxlength="24" required />
+          </label>
+          <label>
+            Color
+            <input type="color" id="categoryColorInput" required />
+          </label>
+          <div class="suggested-colors" id="suggestedColors"></div>
+          <button type="submit">Create category</button>
+          <p class="helper" id="categoryMessage"></p>
+        </form>
+      </div>
+    </div>
+
+    <div id="dayModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="dayModal"></div>
+      <div class="modal-card narrow">
+        <div class="modal-header">
+          <h2 id="dayTitle">Day details</h2>
+          <button class="ghost icon-btn" data-close-modal="dayModal">✕</button>
+        </div>
+        <div class="stack compact">
+          <label>
+            Corner label
+            <select id="cornerLabelSelect"></select>
+          </label>
+          <label>
+            Circle label
+            <select id="circleLabelSelect"></select>
+          </label>
+          <label>
+            Note
+            <input type="text" id="dayNote" maxlength="120" />
+          </label>
+          <div class="button-row">
+            <button id="saveDay" type="button">Save note</button>
+            <button class="ghost" id="clearDay" type="button">Clear note</button>
+          </div>
+          <p class="helper" id="dayMessage"></p>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
