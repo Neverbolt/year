@@ -27,6 +27,7 @@
           <div class="status" id="connectionStatus">Offline</div>
         </div>
         <div class="toolbar-right">
+          <button class="ghost" id="toggleYearOverview">Year overview</button>
           <button class="ghost" id="toggleCategories">Day labels</button>
           <button class="ghost" id="toggleConfig">Config</button>
         </div>
@@ -59,6 +60,31 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <div id="yearOverviewModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="yearOverviewModal"></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="yearOverviewTitle" tabindex="-1">
+        <div class="modal-header">
+          <div class="year-navigation" aria-label="Overview year">
+            <button id="overviewPrevYear" class="ghost icon-btn" aria-label="Previous year">◀</button>
+            <h2 id="yearOverviewTitle" aria-live="polite">2026</h2>
+            <button id="overviewNextYear" class="ghost icon-btn" aria-label="Next year">▶</button>
+          </div>
+          <button class="ghost icon-btn" aria-label="Close year overview" data-close-modal="yearOverviewModal">✕</button>
+        </div>
+        <div id="yearStats" class="year-stats"></div>
+        <section class="overview-section"><h3>Categories</h3><div id="yearCategoryStats" class="stat-breakdown"></div></section>
+        <section class="overview-section"><h3>Day labels</h3><div id="yearLabelStats" class="stat-breakdown"></div></section>
+        <section id="weekendTools" class="overview-section weekend-tools">
+          <h3>Weekend labels</h3>
+          <p class="helper">Fills empty marker slots on Saturdays and Sundays.</p>
+          <label>Weekend label<select id="weekendLabelSelect"></select></label>
+          <p id="weekendPreview" class="helper"></p>
+          <button id="populateWeekends" type="button">Populate weekends</button>
+        </section>
+        <p id="yearMessage" class="helper" role="status" aria-live="polite"></p>
+      </div>
     </div>
 
     <div id="categoriesModal" class="modal hidden" aria-hidden="true">

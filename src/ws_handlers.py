@@ -16,6 +16,7 @@ from ws_commands import (
     DeleteDayLabelCommand,
     DeleteNoteRangeCommand,
     SetDayCommand,
+    PopulateWeekendsCommand,
     UpdateCategoryCommand,
     UpdateDayLabelCommand,
     UpdateNoteRangeCommand,
@@ -37,7 +38,8 @@ from ws_messages import (
 )
 
 WsRuntimeCommand: TypeAlias = (
-    CreateDayLabelCommand
+    PopulateWeekendsCommand
+    | CreateDayLabelCommand
     | CreateCategoryCommand
     | UpdateDayLabelCommand
     | UpdateCategoryCommand
@@ -56,6 +58,8 @@ class AuthenticatedUserProtocol(Protocol):
 
 
 class WsStateProtocol(Protocol):
+    async def populate_weekends(self, year: int, label_id: int) -> int: ...
+    async def refresh_all_sessions(self) -> None: ...
     async def create_day_label(self, name: str, color: str, marker_style: str) -> Any: ...
     async def update_day_label(self, label_id: int, name: str, color: str, marker_style: str, expected_version: int) -> Any: ...
     async def delete_day_label(self, label_id: int, expected_version: int) -> None: ...
@@ -294,7 +298,20 @@ async def handle_update_password(state: WsStateProtocol, ws: web.WebSocketRespon
     )
 
 
+async def handle_populate_weekends(state: WsStateProtocol, ws: web.WebSocketResponse, active_user: AuthenticatedUserProtocol, command: PopulateWeekendsCommand) -> None:
+    if not await ensure_admin_ws(ws, active_user):
+        return
+    try:
+        count = await state.populate_weekends(command.year, command.label_id)
+    except ValueError as exc:
+        await send_ws_error(ws, str(exc))
+        return
+    await state.refresh_all_sessions()
+    await ws.send_str(json.dumps({"type": "weekends_populated", "year": command.year, "count": count}))
+
+
 WS_COMMAND_HANDLERS: dict[type[WsRuntimeCommand], WsCommandHandler] = {
+    PopulateWeekendsCommand: handle_populate_weekends,
     CreateDayLabelCommand: handle_create_day_label,
     CreateCategoryCommand: handle_create_category,
     UpdateDayLabelCommand: handle_update_day_label,

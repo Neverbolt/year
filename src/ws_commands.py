@@ -42,6 +42,12 @@ class AuthCommand(WsCommand):
     token: str
 
 
+class PopulateWeekendsCommand(WsCommand):
+    type: Literal["populate_weekends"] = "populate_weekends"
+    year: int = Field(ge=1000, le=9998, strict=True)
+    label_id: int = Field(alias="labelId", gt=0, strict=True)
+
+
 class CreateCategoryCommand(WsCommand):
     type: Literal["create_category"] = "create_category"
     name: str
@@ -218,6 +224,7 @@ class UpdatePasswordCommand(WsCommand):
 
 WsIncomingCommand = (
     AuthCommand
+    | PopulateWeekendsCommand
     | CreateCategoryCommand
     | UpdateCategoryCommand
     | DeleteCategoryCommand
