@@ -24,7 +24,7 @@ Open `tools/design-review/review.html`. Re-export after changing the proposal. T
 
 - Add a Year overview button next to Day labels, with total days, categorized days, days with notes, weekend days, and category/label breakdowns for the selected year.
 - Populate weekend labels with a preview count, preserving occupied marker slots, the other marker slot, category fills and notes.
-- Choose black or white note and date text from each day's actual fill, using relative luminance and the larger contrast ratio. Check January 1 (no category), January 5 (bright fill), and January 6 (dark fill) in Note contrast.
+- Choose black or white note and date text from each day's actual fill, using relative luminance and the larger contrast ratio. Check January 1 (no category), January 5 (bright fill), and January 6 (dark fill) in Note contrast (a visual aid using the existing Month view, not a proposed layout change).
 - Keep copy functional, with previous/next year controls in the popup header and a mobile two-column summary.
 - Each preview scenario explains what to inspect above the frames; the overview scenario opens the new popup without an original counterpart.
 
