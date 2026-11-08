@@ -181,6 +181,7 @@ function closeAllModals() {
 function updateViewButtons() {
   viewButtons.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === state.view);
+    btn.setAttribute("aria-pressed", String(btn.dataset.view === state.view));
   });
 }
 
@@ -249,7 +250,15 @@ function getNoteRangeShape(dateIso) {
 
 function shouldDim(categoryId) {
   if (state.filterCategoryId === "all") return false;
+  if (state.filterCategoryId === "__unassigned__") return categoryId != null && categoryId !== "";
   return String(categoryId) !== String(state.filterCategoryId);
+}
+
+function setCategoryFilter(value) {
+  const validValues = ["all", "__unassigned__", ...state.categories.map(cat => String(cat.id))];
+  state.filterCategoryId = validValues.includes(String(value)) ? String(value) : "all";
+  categoryFilter.value = state.filterCategoryId;
+  renderCalendar();
 }
 
 function getSelectedPermissionIds(container) {
@@ -285,11 +294,17 @@ function renderPermissionSelector(container, selectedIds = []) {
 }
 
 function updateCategorySelects() {
+  const validValues = ["all", "__unassigned__", ...state.categories.map(cat => String(cat.id))];
+  if (!validValues.includes(state.filterCategoryId)) state.filterCategoryId = "all";
   categoryFilter.innerHTML = "";
   const allOption = document.createElement("option");
   allOption.value = "all";
   allOption.textContent = "All";
   categoryFilter.appendChild(allOption);
+  const unassignedOption = document.createElement("option");
+  unassignedOption.value = "__unassigned__";
+  unassignedOption.textContent = "Unassigned";
+  categoryFilter.appendChild(unassignedOption);
   state.categories.forEach((cat) => {
     const option = document.createElement("option");
     option.value = String(cat.id);
@@ -425,7 +440,7 @@ function renderBrushPalette() {
         { id: "", name: "Unassigned", color: "#020617" },
         ...state.categories,
       ]
-    : [{ id: "all", name: "All", color: "#020617" }, ...state.categories];
+    : [{ id: "all", name: "All", color: "#020617" }, { id: "__unassigned__", name: "Unassigned", color: "#1e293b" }, ...state.categories];
   options.forEach((option) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -434,6 +449,7 @@ function renderBrushPalette() {
       ? String(state.brushCategoryId) === String(option.id)
       : String(state.filterCategoryId) === String(option.id);
     button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
     button.innerHTML = `<span class="color-dot" style="background:${option.color}"></span><span>${option.name}</span>`;
     button.addEventListener("click", () => {
       if (isAdmin()) {
@@ -445,10 +461,7 @@ function renderBrushPalette() {
         renderCalendar();
         return;
       }
-      state.filterCategoryId = String(option.id);
-      categoryFilter.value = state.filterCategoryId;
-      renderBrushPalette();
-      renderCalendar();
+      setCategoryFilter(option.id);
     });
     brushPalette.appendChild(button);
   });
@@ -730,9 +743,7 @@ function buildDayCell(dateObj, compact = true) {
     corner.setAttribute("aria-hidden", "true");
     element.appendChild(corner);
   }
-  if (entry && shouldDim(entry.category_id)) {
-    element.classList.add("dim");
-  } else if (!entry && state.filterCategoryId !== "all") {
+  if (shouldDim(entry?.category_id ?? null)) {
     element.classList.add("dim");
   }
   if (iso === todayIso()) {
@@ -1353,6 +1364,9 @@ async function logout() {
     state.userVersion = null;
     state.managedUsers = [];
     state.categories = [];
+    state.filterCategoryId = "all";
+    state.brushCategoryId = null;
+    categoryFilter.value = "all";
     state.dayLabels = [];
     state.days = new Map();
     state.noteRanges = [];
@@ -1473,8 +1487,7 @@ clearDayBtn.addEventListener("click", () => {
 });
 
 categoryFilter.addEventListener("change", () => {
-  state.filterCategoryId = categoryFilter.value;
-  renderCalendar();
+  setCategoryFilter(categoryFilter.value);
 });
 
 prevPeriod.addEventListener("click", () => {
